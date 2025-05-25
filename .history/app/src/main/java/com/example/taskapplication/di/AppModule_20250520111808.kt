@@ -1,0 +1,69 @@
+package com.example.taskapplication.di
+
+import android.content.Context
+import com.example.taskapplication.data.network.NetworkConnectivityObserver
+import com.example.taskapplication.data.sync.SyncManager
+import com.example.taskapplication.data.websocket.WebSocketManager
+import com.example.taskapplication.util.ConnectionChecker
+import com.example.taskapplication.util.DataStoreManager
+import com.example.taskapplication.util.NetworkUtils
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import dagger.Module
+import dagger.Provides
+import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
+import dagger.hilt.components.SingletonComponent
+import javax.inject.Singleton
+
+@Module
+@InstallIn(SingletonComponent::class)
+object AppModule {
+
+    @Provides
+    @Singleton
+    fun provideNetworkUtils(
+        @ApplicationContext context: Context
+    ): NetworkUtils {
+        return NetworkUtils(context)
+    }
+
+    @Provides
+    @Singleton
+    fun provideConnectionChecker(
+        @ApplicationContext context: Context
+    ): ConnectionChecker {
+        return ConnectionChecker(context)
+    }
+
+    @Provides
+    @Singleton
+    fun provideDataStoreManager(
+        @ApplicationContext context: Context
+    ): DataStoreManager {
+        return DataStoreManager(context)
+    }
+
+    @Provides
+    @Singleton
+    fun provideApplicationContext(
+        @ApplicationContext context: Context
+    ): Context {
+        return context
+    }
+
+    @Provides
+    @Singleton
+    fun provideApplicationScope(): CoroutineScope {
+        return CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    }
+
+    @Provides
+    @Singleton
+    fun provideNetworkConnectivityObserver(
+        @ApplicationContext context: Context
+    ): NetworkConnectivityObserver {
+        return NetworkConnectivityObserver(context)
+    }
+}

@@ -1,0 +1,154 @@
+<resources>
+    <string name="app_name">Quản Lý Công Việc</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_title_1">Quản Lý Công Việc Hiệu Quả</string>
+    <string name="onboarding_desc_1">Sắp xếp công việc cá nhân và nhóm trong một ứng dụng với giao diện trực quan.</string>
+    <string name="onboarding_title_2">Hợp Tác Cùng Đội Nhóm</string>
+    <string name="onboarding_desc_2">Làm việc cùng các thành viên trong nhóm theo thời gian thực và luôn đồng bộ.</string>
+    <string name="onboarding_title_3">Làm Việc Ngoại Tuyến, Đồng Bộ Sau</string>
+    <string name="onboarding_desc_3">Tiếp tục làm việc ngay cả khi không có kết nối internet. Thay đổi sẽ được đồng bộ khi bạn trực tuyến trở lại.</string>
+    <string name="get_started">Bắt Đầu</string>
+    <string name="skip">Bỏ Qua</string>
+    <string name="next_onboarding">Tiếp Theo</string>
+
+
+
+    <!-- Auth -->
+    <string name="app_title">Quản Lý Công Việc</string>
+    <string name="sign_in_to_continue">Đăng nhập để tiếp tục</string>
+    <string name="create_account_subtitle">Đăng ký để bắt đầu</string>
+    <string name="email">Email</string>
+    <string name="password">Mật khẩu</string>
+    <string name="confirm_password">Xác nhận mật khẩu</string>
+    <string name="full_name">Họ và tên</string>
+    <string name="sign_in">Đăng Nhập</string>
+    <string name="sign_up">Đăng Ký</string>
+    <string name="create_account">Tạo Tài Khoản</string>
+    <string name="sign_in_with_google">Đăng nhập với Google</string>
+    <string name="dont_have_account">Chưa có tài khoản?</string>
+    <string name="already_have_account">Đã có tài khoản?</string>
+    <string name="passwords_not_match">Mật khẩu không khớp</string>
+    <string name="hide_password">Ẩn mật khẩu</string>
+    <string name="show_password">Hiện mật khẩu</string>
+    <string name="or">HOẶC</string>
+
+    <!-- Main -->
+    <string name="tasks">Công Việc</string>
+    <string name="teams">Nhóm</string>
+    <string name="profile">Hồ Sơ</string>
+    <string name="logout">Đăng Xuất</string>
+    <string name="version">Phiên bản %s</string>
+
+    <!-- Personal Tasks -->
+    <string name="personal_tasks">Công việc cá nhân</string>
+    <string name="add_task">Thêm công việc</string>
+    <string name="edit_task">Chỉnh sửa công việc</string>
+    <string name="task_title">Tiêu đề công việc</string>
+    <string name="task_description">Mô tả (tùy chọn)</string>
+    <string name="task_due_date">Ngày hạn</string>
+    <string name="task_priority">Độ ưu tiên</string>
+    <string name="priority_low">Thấp</string>
+    <string name="priority_medium">Trung bình</string>
+    <string name="priority_high">Cao</string>
+    <string name="save">Lưu</string>
+    <string name="cancel">Hủy</string>
+    <string name="sync">Đồng bộ</string>
+    <string name="empty_tasks">Bạn chưa có công việc nào. Hãy thêm công việc mới!</string>
+    <string name="error_loading_tasks">Lỗi khi tải công việc: %s</string>
+    <string name="retry">Thử lại</string>
+    <string name="select_date">Chọn ngày</string>
+    <string name="task_created">Đã tạo công việc mới</string>
+    <string name="task_updated">Đã cập nhật công việc</string>
+    <string name="task_deleted">Đã xóa công việc</string>
+    <string name="sync_status">Trạng thái đồng bộ</string>
+    <string name="synced">Đã đồng bộ</string>
+    <string name="pending">Đang chờ</string>
+
+    <!-- Task Status -->
+    <string name="status_pending">Chưa bắt đầu</string>
+    <string name="status_in_progress">Đang thực hiện</string>
+    <string name="status_completed">Đã hoàn thành</string>
+    <string name="status_overdue">Quá hạn</string>
+
+    <!-- Search and Filter -->
+    <string name="search">Tìm kiếm</string>
+    <string name="search_tasks">Tìm kiếm công việc...</string>
+    <string name="filter">Lọc</string>
+    <string name="filter_tasks">Lọc công việc</string>
+    <string name="filter_by_status">Lọc theo trạng thái</string>
+    <string name="filter_by_priority">Lọc theo độ ưu tiên</string>
+    <string name="filter_by_due_date">Lọc theo ngày hạn</string>
+    <string name="start_date">Từ ngày</string>
+    <string name="end_date">Đến ngày</string>
+    <string name="apply_filters">Áp dụng</string>
+    <string name="clear_filters">Xóa bộ lọc</string>
+    <string name="clear">Xóa</string>
+
+    <!-- Pagination -->
+    <string name="load_more_tasks">Tải thêm công việc</string>
+    <string name="page_info">Trang %1$d/%2$d</string>
+    <string name="previous">Trước</string>
+    <string name="next_page">Tiếp</string>
+
+    <!-- Notifications -->
+    <string name="invitation_channel_name">Lời mời tham gia nhóm</string>
+    <string name="invitation_channel_description">Thông báo khi bạn nhận được lời mời tham gia nhóm</string>
+    <string name="invitation_title">Lời mời tham gia nhóm</string>
+    <string name="invitation_content">Bạn được mời tham gia nhóm %s</string>
+    <string name="invitation_summary_title">%d lời mời tham gia nhóm</string>
+    <string name="invitation_summary_content">Bạn có %d lời mời đang chờ</string>
+
+    <!-- Team Update Notifications -->
+    <string name="team_update_channel_name">Cập nhật nhóm</string>
+    <string name="team_update_channel_description">Thông báo khi có thay đổi trong nhóm của bạn</string>
+    <string name="team_updated_title">Thông tin nhóm đã được cập nhật</string>
+    <string name="team_updated_content">Nhóm %s đã được cập nhật</string>
+    <string name="team_member_added_title">Thành viên mới</string>
+    <string name="team_member_added_content">%s đã tham gia nhóm %s</string>
+    <string name="team_member_removed_title">Thành viên đã rời nhóm</string>
+    <string name="team_member_removed_content">%s đã rời khỏi nhóm %s</string>
+    <string name="team_member_role_changed_title">Vai trò thành viên đã thay đổi</string>
+    <string name="team_member_role_changed_content">%s hiện là %s trong nhóm %s</string>
+
+    <!-- Chat -->
+    <string name="team_chat">Trò chuyện nhóm</string>
+    <string name="loading_messages">Đang tải tin nhắn...</string>
+    <string name="no_messages">Chưa có tin nhắn nào</string>
+    <string name="start_conversation">Bắt đầu cuộc trò chuyện bằng cách gửi tin nhắn cho nhóm của bạn</string>
+    <string name="error_occurred">Đã xảy ra lỗi!</string>
+    <string name="delete_message">Xóa tin nhắn</string>
+    <string name="delete_message_confirmation">Bạn có chắc chắn muốn xóa tin nhắn này? Hành động này không thể hoàn tác.</string>
+    <string name="delete">Xóa</string>
+    <string name="edit">Chỉnh sửa</string>
+    <string name="back">Quay lại</string>
+    <string name="more_options">Thêm tùy chọn</string>
+    <string name="send_message">Gửi tin nhắn</string>
+    <string name="type_message">Nhập tin nhắn...</string>
+    <string name="add_attachment">Thêm tệp đính kèm</string>
+    <string name="remove_attachment">Xóa tệp đính kèm</string>
+    <string name="cancel_edit">Hủy chỉnh sửa</string>
+    <string name="editing_message">Đang chỉnh sửa tin nhắn</string>
+    <string name="message_count">%d tin nhắn</string>
+    <string name="typing_single">%s đang nhập...</string>
+    <string name="typing_multiple" formatted="false">%s và %s đang nhập...</string>
+    <string name="typing_more" formatted="false">%s, %s và %d người khác đang nhập...</string>
+
+    <!-- Main Navigation -->
+    <string name="nav_personal_tasks">Công việc cá nhân</string>
+    <string name="nav_teams">Nhóm</string>
+    <string name="nav_profile">Hồ sơ</string>
+
+    <!-- Biometric Authentication -->
+    <string name="biometric_login">Đăng nhập bằng vân tay</string>
+    <string name="biometric_prompt_title">Xác thực sinh trắc học</string>
+    <string name="biometric_prompt_subtitle">Sử dụng vân tay để đăng nhập</string>
+    <string name="biometric_negative_button">Hủy</string>
+
+    <!-- Error Messages -->
+    <string name="error_network">Lỗi kết nối mạng</string>
+    <string name="error_server">Lỗi máy chủ</string>
+    <string name="error_unknown">Đã xảy ra lỗi không xác định</string>
+    <string name="error_authentication">Lỗi xác thực</string>
+    <string name="error_permission">Không có quyền thực hiện hành động này</string>
+</resources>
