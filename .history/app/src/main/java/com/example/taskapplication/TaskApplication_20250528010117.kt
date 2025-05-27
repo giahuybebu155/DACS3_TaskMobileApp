@@ -5,24 +5,26 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
+import android.util.Log
 import androidx.work.Configuration
-import androidx.work.Constraints
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
 import com.example.taskapplication.R
+import com.example.taskapplication.data.database.DatabaseCleaner
 import com.example.taskapplication.workers.InvitationNotificationWorker
 import com.example.taskapplication.workers.PersonalTaskSyncWorker
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import java.util.concurrent.TimeUnit
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
-import java.util.concurrent.TimeUnit
 
 @HiltAndroidApp
 class TaskApplication : Application(), Configuration.Provider {
 
     @Inject
     lateinit var workerFactory: androidx.work.WorkerFactory
+
+    @Inject
+    lateinit var databaseCleaner: DatabaseCleaner
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
@@ -31,11 +33,67 @@ class TaskApplication : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+
+        // Set up global exception handler to prevent crashes
+        setupGlobalExceptionHandler()
+
+        // Kiểm tra và xóa database cũ nếu cần
+        try {
+            if (databaseCleaner.needsCleaning()) {
+                Log.d("TaskApplication", "Cleaning old database...")
+                databaseCleaner.cleanDatabase()
+                Log.d("TaskApplication", "Database cleaned successfully")
+            }
+        } catch (e: Exception) {
+            Log.e("TaskApplication", "Error cleaning database", e)
+        }
+
         createNotificationChannels()
         scheduleWorkers()
-        schedulePersonalTaskSync(this)
     }
-    
+
+    /**
+     * Set up global exception handler to prevent app crashes
+     */
+    private fun setupGlobalExceptionHandler() {
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+
+        Thread.setDefaultUncaughtExceptionHandler { thread, exception ->
+            Log.e("TaskApplication", "💥 [GLOBAL_CRASH] ===== UNCAUGHT EXCEPTION =====")
+            Log.e("TaskApplication", "💥 [GLOBAL_CRASH] Thread: ${thread.name}")
+            Log.e("TaskApplication", "💥 [GLOBAL_CRASH] Exception type: ${exception.javaClass.simpleName}")
+            Log.e("TaskApplication", "💥 [GLOBAL_CRASH] Exception message: ${exception.message}")
+
+            // Log detailed exception info for network-related crashes
+            when (exception) {
+                is java.net.SocketTimeoutException -> {
+                    Log.e("TaskApplication", "⏰ [GLOBAL_CRASH] Network timeout - server not responding")
+                }
+                is java.net.ConnectException -> {
+                    Log.e("TaskApplication", "🔌 [GLOBAL_CRASH] Connection refused - server not running")
+                }
+                is java.net.UnknownHostException -> {
+                    Log.e("TaskApplication", "🌐 [GLOBAL_CRASH] Unknown host - DNS resolution failed")
+                }
+                is retrofit2.HttpException -> {
+                    Log.e("TaskApplication", "📡 [GLOBAL_CRASH] HTTP error: ${exception.code()}")
+                }
+                else -> {
+                    Log.e("TaskApplication", "❓ [GLOBAL_CRASH] Other exception type")
+                }
+            }
+
+            Log.e("TaskApplication", "⚠️ [GLOBAL_CRASH] This crash was likely caused by server connectivity issues")
+            Log.e("TaskApplication", "⚠️ [GLOBAL_CRASH] App should work offline - please check server status")
+
+            exception.printStackTrace()
+
+            // Call the default handler to maintain normal crash behavior
+            defaultHandler?.uncaughtException(thread, exception)
+        }
+
+        Log.d("TaskApplication", "✅ Global exception handler set up successfully")
+    }
 
     /**
      * Lên lịch cho các worker
@@ -43,24 +101,6 @@ class TaskApplication : Application(), Configuration.Provider {
     private fun scheduleWorkers() {
         // Lên lịch kiểm tra lời mời
         InvitationNotificationWorker.schedulePeriodicInvitationCheck(this)
-    }
-
-    /**
-     * Lên lịch cho worker đồng bộ công việc cá nhân định kỳ
-     */
-    private fun schedulePersonalTaskSync(context: Context) {
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .build()
-        val syncRequest = PeriodicWorkRequestBuilder<PersonalTaskSyncWorker>(15, TimeUnit.MINUTES)
-            .setConstraints(constraints)
-            .build()
-        WorkManager.getInstance(context)
-            .enqueueUniquePeriodicWork(
-                "PersonalTaskSync",
-                ExistingPeriodicWorkPolicy.KEEP,
-                syncRequest
-            )
     }
 
     private fun createNotificationChannels() {

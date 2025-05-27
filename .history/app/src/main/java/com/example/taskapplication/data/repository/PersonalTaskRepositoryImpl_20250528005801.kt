@@ -156,20 +156,20 @@ class PersonalTaskRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getTask(id: String): PersonalTask? {
-        val userId = dataStoreManager.getCurrentUserId() ?: return null
-        return personalTaskDao.getTaskByIdAndUser(id, userId)?.toDomainModel()
+        return personalTaskDao.getTaskById(id)?.toDomainModel()
     }
 
     override suspend fun createTask(task: PersonalTask): Result<PersonalTask> {
         try {
-            val userId = dataStoreManager.getCurrentUserId() ?: return Result.failure(Exception("No userId found"))
+            // Tạo ID mới nếu chưa có
             val taskWithId = if (task.id.isBlank()) {
                 task.copy(id = UUID.randomUUID().toString())
             } else {
                 task
             }
+
+            // Lưu vào local database trước với trạng thái pending_create
             val taskEntity = taskWithId.toEntity().copy(
-                userId = userId,
                 syncStatus = "pending_create",
                 lastModified = System.currentTimeMillis()
             )

@@ -41,12 +41,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
-    if (task.isSuccessful) {
-        val token = task.result
-        android.util.Log.d("FCM_TOKEN", token)
-    }
-}
 
         // Configure Google Sign In
         try {

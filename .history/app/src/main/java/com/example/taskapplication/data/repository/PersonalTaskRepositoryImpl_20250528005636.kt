@@ -98,30 +98,30 @@ class PersonalTaskRepositoryImpl @Inject constructor(
     }
 
     override fun getTasksDueThisWeek(): Flow<List<PersonalTask>> {
-        return flow {
-            val userId = dataStoreManager.getCurrentUserId() ?: return@flow emit(emptyList())
-            val calendar = Calendar.getInstance()
-            calendar.set(Calendar.DAY_OF_WEEK, calendar.firstDayOfWeek)
-            calendar.set(Calendar.HOUR_OF_DAY, 0)
-            calendar.set(Calendar.MINUTE, 0)
-            calendar.set(Calendar.SECOND, 0)
-            calendar.set(Calendar.MILLISECOND, 0)
-            val startOfWeek = calendar.timeInMillis
-            calendar.add(Calendar.DAY_OF_WEEK, 6)
-            calendar.set(Calendar.HOUR_OF_DAY, 23)
-            calendar.set(Calendar.MINUTE, 59)
-            calendar.set(Calendar.SECOND, 59)
-            calendar.set(Calendar.MILLISECOND, 999)
-            val endOfWeek = calendar.timeInMillis
-            emitAll(personalTaskDao.getTasksDueThisWeekByUser(startOfWeek, endOfWeek, userId).map { entities -> entities.map { it.toDomainModel() } })
-        }.flowOn(Dispatchers.IO)
+        val calendar = Calendar.getInstance()
+        calendar.set(Calendar.DAY_OF_WEEK, calendar.firstDayOfWeek)
+        calendar.set(Calendar.HOUR_OF_DAY, 0)
+        calendar.set(Calendar.MINUTE, 0)
+        calendar.set(Calendar.SECOND, 0)
+        calendar.set(Calendar.MILLISECOND, 0)
+        val startOfWeek = calendar.timeInMillis
+
+        calendar.add(Calendar.DAY_OF_WEEK, 6)
+        calendar.set(Calendar.HOUR_OF_DAY, 23)
+        calendar.set(Calendar.MINUTE, 59)
+        calendar.set(Calendar.SECOND, 59)
+        calendar.set(Calendar.MILLISECOND, 999)
+        val endOfWeek = calendar.timeInMillis
+
+        return personalTaskDao.getTasksDueThisWeek(startOfWeek, endOfWeek)
+            .map { entities -> entities.map { it.toDomainModel() } }
+            .flowOn(Dispatchers.IO)
     }
 
     override fun searchTasks(query: String): Flow<List<PersonalTask>> {
-        return flow {
-            val userId = dataStoreManager.getCurrentUserId() ?: return@flow emit(emptyList())
-            emitAll(personalTaskDao.searchTasksByUser(query, userId).map { entities -> entities.map { it.toDomainModel() } })
-        }.flowOn(Dispatchers.IO)
+        return personalTaskDao.searchTasks(query)
+            .map { entities -> entities.map { it.toDomainModel() } }
+            .flowOn(Dispatchers.IO)
     }
 
     override fun filterAndSearchTasksLocally(
@@ -131,12 +131,17 @@ class PersonalTaskRepositoryImpl @Inject constructor(
         endDate: Long?,
         query: String?
     ): Flow<List<PersonalTask>> {
-        return flow {
-            val userId = dataStoreManager.getCurrentUserId() ?: return@flow emit(emptyList())
-            emitAll(personalTaskDao.getAllTasksByUser(userId).map { entities ->
+        // Sử dụng combine để kết hợp các điều kiện lọc
+        return personalTaskDao.getAllTasks()
+            .map { entities ->
                 entities.filter { entity ->
+                    // Lọc theo trạng thái
                     val statusMatch = status == null || entity.status == status
+
+                    // Lọc theo độ ưu tiên
                     val priorityMatch = priority == null || entity.priority == priority
+
+                    // Lọc theo ngày hạn
                     val dueDateMatch = if (startDate != null && endDate != null && entity.dueDate != null) {
                         entity.dueDate in startDate..endDate
                     } else if (startDate != null && entity.dueDate != null) {
@@ -146,30 +151,34 @@ class PersonalTaskRepositoryImpl @Inject constructor(
                     } else {
                         true
                     }
+
+                    // Lọc theo từ khóa tìm kiếm
                     val searchMatch = query.isNullOrEmpty() ||
                         entity.title.contains(query, ignoreCase = true) ||
                         (entity.description?.contains(query, ignoreCase = true) ?: false)
+
+                    // Kết hợp tất cả các điều kiện
                     statusMatch && priorityMatch && dueDateMatch && searchMatch
                 }.map { it.toDomainModel() }
-            })
-        }.flowOn(Dispatchers.IO)
+            }
+            .flowOn(Dispatchers.IO)
     }
 
     override suspend fun getTask(id: String): PersonalTask? {
-        val userId = dataStoreManager.getCurrentUserId() ?: return null
-        return personalTaskDao.getTaskByIdAndUser(id, userId)?.toDomainModel()
+        return personalTaskDao.getTaskById(id)?.toDomainModel()
     }
 
     override suspend fun createTask(task: PersonalTask): Result<PersonalTask> {
         try {
-            val userId = dataStoreManager.getCurrentUserId() ?: return Result.failure(Exception("No userId found"))
+            // Tạo ID mới nếu chưa có
             val taskWithId = if (task.id.isBlank()) {
                 task.copy(id = UUID.randomUUID().toString())
             } else {
                 task
             }
+
+            // Lưu vào local database trước với trạng thái pending_create
             val taskEntity = taskWithId.toEntity().copy(
-                userId = userId,
                 syncStatus = "pending_create",
                 lastModified = System.currentTimeMillis()
             )

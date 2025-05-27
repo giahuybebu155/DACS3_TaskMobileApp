@@ -41,12 +41,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
-    if (task.isSuccessful) {
-        val token = task.result
-        android.util.Log.d("FCM_TOKEN", token)
-    }
-}
 
         // Configure Google Sign In
         try {
@@ -72,6 +66,9 @@ class MainActivity : ComponentActivity() {
             val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
             handleGoogleSignInResult(task)
         }
+
+        // Configure Firebase Messaging
+        configureFirebaseMessaging()
 
         // Observe auth events
         lifecycleScope.launch {
@@ -144,6 +141,19 @@ class MainActivity : ComponentActivity() {
             // Unexpected error
             Log.e(TAG, "Unexpected error during Google Sign In", e)
             Toast.makeText(this, "Unexpected error: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun configureFirebaseMessaging() {
+        FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+            if (!task.isSuccessful) {
+                Log.w(TAG, "Fetching FCM registration token failed", task.exception)
+                return@addOnCompleteListener
+            }
+
+            // Get new FCM registration token
+            val token = task.result
+            Log.d(TAG, "FCM Registration Token: $token")
         }
     }
 }

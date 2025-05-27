@@ -82,6 +82,44 @@ interface PersonalTaskDao {
     @Query("SELECT * FROM personal_tasks WHERE title LIKE '%' || :query || '%' OR description LIKE '%' || :query || '%' ORDER BY `order` ASC")
     fun searchTasks(query: String): Flow<List<PersonalTaskEntity>>
 
+    // ===== QUERIES WITH USER ID =====
+
+    // Get all tasks by user
+    @Query("SELECT * FROM personal_tasks WHERE userId = :userId ORDER BY `order` ASC")
+    fun getAllTasksByUser(userId: String): Flow<List<PersonalTaskEntity>>
+
+    // Get task by ID and user
+    @Query("SELECT * FROM personal_tasks WHERE id = :taskId AND userId = :userId")
+    suspend fun getTaskByIdAndUser(taskId: String, userId: String): PersonalTaskEntity?
+
+    // Get tasks by priority and user
+    @Query("SELECT * FROM personal_tasks WHERE priority = :priority AND userId = :userId ORDER BY dueDate ASC, `order` ASC")
+    fun getTasksByPriorityAndUser(priority: String, userId: String): Flow<List<PersonalTaskEntity>>
+
+    // Get tasks by status and user
+    @Query("SELECT * FROM personal_tasks WHERE status = :status AND userId = :userId ORDER BY dueDate ASC, `order` ASC")
+    fun getTasksByTaskStatusAndUser(status: String, userId: String): Flow<List<PersonalTaskEntity>>
+
+    // Get tasks by due date range and user
+    @Query("SELECT * FROM personal_tasks WHERE dueDate BETWEEN :startDate AND :endDate AND userId = :userId ORDER BY dueDate ASC, `order` ASC")
+    fun getTasksByDueDateRangeAndUser(startDate: Long, endDate: Long, userId: String): Flow<List<PersonalTaskEntity>>
+
+    // Get overdue tasks by user
+    @Query("SELECT * FROM personal_tasks WHERE dueDate < :currentDate AND status != 'completed' AND userId = :userId ORDER BY dueDate ASC, `order` ASC")
+    fun getOverdueTasksByUser(currentDate: Long, userId: String): Flow<List<PersonalTaskEntity>>
+
+    // Get tasks due today by user
+    @Query("SELECT * FROM personal_tasks WHERE dueDate BETWEEN :startOfDay AND :endOfDay AND userId = :userId ORDER BY dueDate ASC, `order` ASC")
+    fun getTasksDueTodayByUser(startOfDay: Long, endOfDay: Long, userId: String): Flow<List<PersonalTaskEntity>>
+
+    // Get tasks due this week by user
+    @Query("SELECT * FROM personal_tasks WHERE dueDate BETWEEN :startOfWeek AND :endOfWeek AND userId = :userId ORDER BY dueDate ASC, `order` ASC")
+    fun getTasksDueThisWeekByUser(startOfWeek: Long, endOfWeek: Long, userId: String): Flow<List<PersonalTaskEntity>>
+
+    // Search tasks by user
+    @Query("SELECT * FROM personal_tasks WHERE (title LIKE '%' || :query || '%' OR description LIKE '%' || :query || '%') AND userId = :userId ORDER BY `order` ASC")
+    fun searchTasksByUser(query: String, userId: String): Flow<List<PersonalTaskEntity>>
+
     // Get max order
     @Query("SELECT MAX(`order`) FROM personal_tasks")
     suspend fun getMaxOrder(): Int?
@@ -94,42 +132,9 @@ interface PersonalTaskDao {
     @Query("SELECT COUNT(*) FROM personal_tasks WHERE syncStatus != :syncedStatus")
     fun countPendingSyncTasks(syncedStatus: String = PersonalTask.SyncStatus.SYNCED): Flow<Int>
 
-    @Query("SELECT * FROM personal_tasks WHERE userId = :userId ORDER BY `order` ASC")
-    fun getAllTasksByUser(userId: String): Flow<List<PersonalTaskEntity>>
+    @Query("DELETE FROM personal_tasks")
+    suspend fun deleteAllTasks()
 
-    @Query("SELECT * FROM personal_tasks WHERE userId = :userId ORDER BY `order` ASC")
-    suspend fun getAllTasksByUserSync(userId: String): List<PersonalTaskEntity>
-
-    @Query("SELECT * FROM personal_tasks WHERE id = :taskId AND userId = :userId")
-    suspend fun getTaskByIdAndUser(taskId: String, userId: String): PersonalTaskEntity?
-
-    @Query("SELECT * FROM personal_tasks WHERE syncStatus = :status AND userId = :userId")
-    suspend fun getTasksByStatusAndUser(status: String, userId: String): List<PersonalTaskEntity>
-
-    @Query("SELECT * FROM personal_tasks WHERE syncStatus != :syncedStatus AND userId = :userId")
-    suspend fun getPendingSyncTasksByUser(syncedStatus: String = PersonalTask.SyncStatus.SYNCED, userId: String): List<PersonalTaskEntity>
-
-    @Query("SELECT * FROM personal_tasks WHERE priority = :priority AND userId = :userId ORDER BY `order` ASC")
-    fun getTasksByPriorityAndUser(priority: String, userId: String): Flow<List<PersonalTaskEntity>>
-
-    @Query("SELECT * FROM personal_tasks WHERE status = :status AND userId = :userId ORDER BY `order` ASC")
-    fun getTasksByTaskStatusAndUser(status: String, userId: String): Flow<List<PersonalTaskEntity>>
-
-    @Query("SELECT * FROM personal_tasks WHERE dueDate BETWEEN :startDate AND :endDate AND userId = :userId ORDER BY dueDate ASC, `order` ASC")
-    fun getTasksByDueDateRangeAndUser(startDate: Long, endDate: Long, userId: String): Flow<List<PersonalTaskEntity>>
-
-    @Query("SELECT * FROM personal_tasks WHERE dueDate < :currentDate AND status != 'completed' AND userId = :userId ORDER BY dueDate ASC, `order` ASC")
-    fun getOverdueTasksByUser(currentDate: Long, userId: String): Flow<List<PersonalTaskEntity>>
-
-    @Query("SELECT * FROM personal_tasks WHERE dueDate BETWEEN :startOfDay AND :endOfDay AND userId = :userId ORDER BY `order` ASC")
-    fun getTasksDueTodayByUser(startOfDay: Long, endOfDay: Long, userId: String): Flow<List<PersonalTaskEntity>>
-
-    @Query("SELECT * FROM personal_tasks WHERE dueDate BETWEEN :startOfWeek AND :endOfWeek AND userId = :userId ORDER BY dueDate ASC, `order` ASC")
-    fun getTasksDueThisWeekByUser(startOfWeek: Long, endOfWeek: Long, userId: String): Flow<List<PersonalTaskEntity>>
-
-    @Query("SELECT * FROM personal_tasks WHERE (title LIKE '%' || :query || '%' OR description LIKE '%' || :query || '%') AND userId = :userId ORDER BY `order` ASC")
-    fun searchTasksByUser(query: String, userId: String): Flow<List<PersonalTaskEntity>>
-
-    @Query("SELECT COUNT(*) FROM personal_tasks WHERE syncStatus != :syncedStatus AND userId = :userId")
-    fun countPendingSyncTasksByUser(syncedStatus: String = PersonalTask.SyncStatus.SYNCED, userId: String): Flow<Int>
+    @Query("UPDATE personal_tasks SET syncStatus = :status WHERE id = :taskId")
+    suspend fun updateSyncStatus(taskId: String, status: String)
 }
