@@ -50,10 +50,7 @@ android {
 }
 
 dependencies {
-    // Firebase BOM
-    implementation platform(libs.firebase.bom)
     implementation libs.firebase.messaging.ktx
-
     def composeBom = platform('androidx.compose:compose-bom:2024.02.00')
     implementation composeBom
     androidTestImplementation composeBom
@@ -125,7 +122,8 @@ dependencies {
     debugImplementation 'androidx.compose.ui:ui-tooling'
     debugImplementation 'androidx.compose.ui:ui-test-manifest'
 
-
+    // Firebase Cloud Messaging
+    implementation 'com.google.firebase:firebase-messaging:23.4.0'
 }
 
 apply plugin: 'com.google.gms.google-services'
