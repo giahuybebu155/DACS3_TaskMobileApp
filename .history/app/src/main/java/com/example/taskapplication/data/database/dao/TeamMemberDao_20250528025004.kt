@@ -23,9 +23,6 @@ interface TeamMemberDao {
     @Query("SELECT * FROM team_members WHERE teamId = :teamId")
     suspend fun getTeamMembersWithUserSync(teamId: String): List<TeamMemberWithUser>
 
-    @Query("SELECT * FROM team_members WHERE userId = :userId AND teamId = :teamId LIMIT 1")
-    suspend fun getTeamMemberByUserIdAndTeamId(userId: String, teamId: String): TeamMemberEntity?
-
     @Query("SELECT * FROM team_members WHERE userId = :userId")
     fun getUserTeamMemberships(userId: String): Flow<List<TeamMemberEntity>>
 

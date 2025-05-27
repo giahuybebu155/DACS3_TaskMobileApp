@@ -97,22 +97,13 @@ fun TeamMemberItem(
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
-                    text = when {
-                        !member.userName.isNullOrEmpty() -> member.userName
-                        member.userId.isNotEmpty() -> member.userId
-                        else -> member.invitedBy?.let { "Invited by $it" } ?: "Pending Invitation"
+                    text = if (member.userId.isNotEmpty()) {
+                        member.userId
+                    } else {
+                        member.invitedBy?.let { "Invited by $it" } ?: "Pending Invitation"
                     },
                     style = MaterialTheme.typography.bodyLarge
                 )
-
-                // Show email if available, otherwise show role
-                if (!member.userEmail.isNullOrEmpty()) {
-                    Text(
-                        text = member.userEmail,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
 
                 Text(
                     text = member.role.capitalize(Locale.current),
@@ -160,9 +151,8 @@ fun TeamMemberItem(
                             onClick = {
                                 if (member.role == "admin") {
                                     // Show confirmation dialog for demoting admin
-                                    val displayName = member.userName ?: member.userId
                                     confirmTitle = "Demote Admin"
-                                    confirmMessage = "Are you sure you want to demote $displayName from admin to member? This will remove their administrative privileges."
+                                    confirmMessage = "Are you sure you want to demote ${member.userId} from admin to member? This will remove their administrative privileges."
                                     confirmAction = { onChangeRole(member.userId, newRole) }
                                     showConfirmDialog = true
                                 } else {
@@ -212,9 +202,8 @@ fun TeamMemberItem(
                             },
                             onClick = {
                                 // Show confirmation dialog for removing member
-                                val displayName = member.userName ?: member.userId
                                 confirmTitle = "Remove Member"
-                                confirmMessage = "Are you sure you want to remove $displayName from the team? This action cannot be undone."
+                                confirmMessage = "Are you sure you want to remove ${member.userId} from the team? This action cannot be undone."
                                 confirmAction = { onRemoveMember(member.userId) }
                                 showConfirmDialog = true
                                 showMenu = false

@@ -94,17 +94,3 @@ fun TeamMemberResponse.toDomainModel(existingMember: TeamMemberEntity? = null): 
         userAvatar = user.avatar
     )
 }
-
-// Extract UserEntity from TeamMemberResponse
-fun TeamMemberResponse.toUserEntity(existingUser: UserEntity? = null): UserEntity {
-    return UserEntity(
-        id = userId,
-        name = user.name,
-        email = user.email,
-        avatar = user.avatar,
-        serverId = user.id.toString(),
-        syncStatus = "synced",
-        lastModified = System.currentTimeMillis(),
-        createdAt = existingUser?.createdAt ?: System.currentTimeMillis()
-    )
-}

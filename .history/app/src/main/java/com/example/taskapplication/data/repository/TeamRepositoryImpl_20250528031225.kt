@@ -591,8 +591,12 @@ class TeamRepositoryImpl @Inject constructor(
                     // Kiểm tra xem nhóm đã được đồng bộ lên server chưa
                     if (team.serverId == null) {
                         Log.d(TAG, "🔄 [THEO DÕI] Nhóm chưa được đồng bộ lên server, tiến hành đồng bộ trước")
-                        // Bỏ sync để tránh spam API
-                        Log.d(TAG, "⚠️ [THEO DÕI] Nhóm chưa có serverId, cần sync trong background")
+                        val syncResult = syncTeams()
+                        if (syncResult.isFailure) {
+                            Log.e(TAG, "❌ [THEO DÕI] Lỗi khi đồng bộ nhóm lên server: ${syncResult.exceptionOrNull()?.message}")
+                        } else {
+                            Log.d(TAG, "✅ [THEO DÕI] Đã đồng bộ nhóm lên server")
+                        }
 
                         // Lấy lại thông tin nhóm sau khi đồng bộ
                         val updatedTeam = teamDao.getTeamByIdSync(teamId)
@@ -616,8 +620,8 @@ class TeamRepositoryImpl @Inject constructor(
                     if (syncedTeam.serverId == null) {
                         Log.e(TAG, "❌ [THEO DÕI] Nhóm không có serverId, thử đồng bộ lại nhóm")
 
-                        // Bỏ sync để tránh spam API
-                        // syncTeams()
+                        // Thử đồng bộ lại nhóm
+                        syncTeams()
 
                         // Lấy lại thông tin nhóm sau khi đồng bộ
                         val updatedTeam = teamDao.getTeamByIdSync(teamId)

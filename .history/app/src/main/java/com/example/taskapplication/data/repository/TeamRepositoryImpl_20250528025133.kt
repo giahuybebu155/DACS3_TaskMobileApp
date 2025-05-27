@@ -15,7 +15,6 @@ import com.example.taskapplication.data.mapper.TeamRoleHistoryMapper.toTeamRoleH
 import com.example.taskapplication.data.mapper.TeamRoleHistoryMapper.toTeamRoleHistoryList
 import com.example.taskapplication.data.mapper.toDomainModel
 import com.example.taskapplication.data.mapper.toEntity
-import com.example.taskapplication.data.mapper.toUserEntity
 import com.example.taskapplication.data.util.ConnectionChecker
 import com.example.taskapplication.data.util.DataStoreManager
 import com.example.taskapplication.domain.model.Team
@@ -384,53 +383,6 @@ class TeamRepositoryImpl @Inject constructor(
             .flowOn(Dispatchers.IO)
     }
 
-    /**
-     * Sync team members from server and save user information
-     */
-    private suspend fun syncTeamMembersFromServer(teamId: String): Result<Unit> {
-        try {
-            // Get team to find serverId
-            val team = teamDao.getTeamByIdSync(teamId)
-            if (team?.serverId == null) {
-                Log.e(TAG, "Team not found or no serverId: $teamId")
-                return Result.failure(IOException("Team not synced with server"))
-            }
-
-            // Call API to get team members with user information
-            val response = apiService.getTeamMembers(team.serverId!!)
-
-            if (response.isSuccessful && response.body() != null) {
-                val teamMembers = response.body()!!
-
-                for (memberResponse in teamMembers) {
-                    // Save user information
-                    val existingUser = userDao.getUserById(memberResponse.userId)
-                    val userEntity = memberResponse.toUserEntity(existingUser)
-                    userDao.insertUser(userEntity)
-
-                    // Save or update team member
-                    val existingMember = teamMemberDao.getTeamMemberByUserIdAndTeamId(memberResponse.userId, teamId)
-                    val memberEntity = memberResponse.toEntity(teamId, existingMember)
-
-                    if (existingMember != null) {
-                        teamMemberDao.updateTeamMember(memberEntity.copy(id = existingMember.id))
-                    } else {
-                        teamMemberDao.insertTeamMember(memberEntity)
-                    }
-                }
-
-                Log.d(TAG, "✅ Successfully synced ${teamMembers.size} team members with user info")
-                return Result.success(Unit)
-            } else {
-                Log.e(TAG, "Failed to get team members: ${response.code()}")
-                return Result.failure(IOException("Failed to get team members"))
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error syncing team members from server", e)
-            return Result.failure(e)
-        }
-    }
-
     override suspend fun inviteUserToTeam(teamId: String, userEmail: String): Result<com.example.taskapplication.domain.model.TeamMember> {
         try {
             Log.d(TAG, "🚀 [THEO DÕI] Bắt đầu quá trình mời người dùng: teamId=$teamId, email=$userEmail")
@@ -451,8 +403,14 @@ class TeamRepositoryImpl @Inject constructor(
             }
             Log.d(TAG, "✅ [THEO DÕI] Người dùng hiện tại: $currentUserId")
 
-            // Bỏ sync để tránh spam API
-            // Kiểm tra quyền dựa trên dữ liệu local hiện có
+            // Đồng bộ dữ liệu từ server trước khi kiểm tra quyền
+            try {
+                Log.d(TAG, "🔄 [THEO DÕI] Đồng bộ dữ liệu từ server trước khi kiểm tra quyền")
+                syncTeamMembers()
+                Log.d(TAG, "✅ [THEO DÕI] Đã đồng bộ dữ liệu từ server")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ [THEO DÕI] Lỗi khi đồng bộ dữ liệu từ server: ${e.message}")
+            }
 
             // Kiểm tra xem người dùng hiện tại có phải là manager của team hay không
             // Lấy trực tiếp thành viên nhóm từ cơ sở dữ liệu
@@ -591,8 +549,12 @@ class TeamRepositoryImpl @Inject constructor(
                     // Kiểm tra xem nhóm đã được đồng bộ lên server chưa
                     if (team.serverId == null) {
                         Log.d(TAG, "🔄 [THEO DÕI] Nhóm chưa được đồng bộ lên server, tiến hành đồng bộ trước")
-                        // Bỏ sync để tránh spam API
-                        Log.d(TAG, "⚠️ [THEO DÕI] Nhóm chưa có serverId, cần sync trong background")
+                        val syncResult = syncTeams()
+                        if (syncResult.isFailure) {
+                            Log.e(TAG, "❌ [THEO DÕI] Lỗi khi đồng bộ nhóm lên server: ${syncResult.exceptionOrNull()?.message}")
+                        } else {
+                            Log.d(TAG, "✅ [THEO DÕI] Đã đồng bộ nhóm lên server")
+                        }
 
                         // Lấy lại thông tin nhóm sau khi đồng bộ
                         val updatedTeam = teamDao.getTeamByIdSync(teamId)
@@ -616,8 +578,8 @@ class TeamRepositoryImpl @Inject constructor(
                     if (syncedTeam.serverId == null) {
                         Log.e(TAG, "❌ [THEO DÕI] Nhóm không có serverId, thử đồng bộ lại nhóm")
 
-                        // Bỏ sync để tránh spam API
-                        // syncTeams()
+                        // Thử đồng bộ lại nhóm
+                        syncTeams()
 
                         // Lấy lại thông tin nhóm sau khi đồng bộ
                         val updatedTeam = teamDao.getTeamByIdSync(teamId)
@@ -1124,15 +1086,6 @@ class TeamRepositoryImpl @Inject constructor(
                 teamMemberDao.updateTeamMember(updatedMember)
                 Log.d(TAG, "✅ [THEO DÕI] Đã cập nhật thành viên nhóm với ID từ server")
 
-                // Sync team members to get user information
-                try {
-                    syncTeamMembersFromServer(teamMemberEntity.teamId)
-                    Log.d(TAG, "✅ [THEO DÕI] Đã đồng bộ thông tin thành viên nhóm từ server")
-                } catch (e: Exception) {
-                    Log.e(TAG, "❌ [THEO DÕI] Lỗi khi đồng bộ thông tin thành viên: ${e.message}", e)
-                    // Không fail vì invitation đã thành công
-                }
-
                 return Result.success(updatedMember.toDomainModel())
             } else {
                 Log.e(TAG, "❌ [THEO DÕI] Lỗi khi gửi lời mời lên server: ${response.code()} - ${response.message()}")
@@ -1228,18 +1181,14 @@ class TeamRepositoryImpl @Inject constructor(
 
                     try {
                         if (response.isSuccessful && response.body() != null) {
-                            val serverInvitation = response.body()!!
-
+                            val serverMember = response.body()!!
                             // Cập nhật thành viên với thông tin từ server
                             val updatedMember = member.copy(
-                                serverId = serverInvitation.id.toString(),
+                                serverId = serverMember.id.toString(),
                                 syncStatus = "synced",
                                 lastModified = System.currentTimeMillis()
                             )
                             teamMemberDao.updateTeamMember(updatedMember)
-
-                            // Bỏ sync để tránh spam API
-                            // User information sẽ được sync trong background worker
                         } else {
                             Log.e(TAG, "Lỗi khi tạo thành viên nhóm trên server: ${response.code()}")
                         }

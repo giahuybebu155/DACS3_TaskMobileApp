@@ -7,24 +7,11 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface TeamMemberDao {
-    // Original methods (kept for backward compatibility)
     @Query("SELECT * FROM team_members WHERE teamId = :teamId")
     fun getTeamMembers(teamId: String): Flow<List<TeamMemberEntity>>
 
     @Query("SELECT * FROM team_members WHERE teamId = :teamId")
     suspend fun getTeamMembersSync(teamId: String): List<TeamMemberEntity>
-
-    // New methods with user information
-    @Transaction
-    @Query("SELECT * FROM team_members WHERE teamId = :teamId")
-    fun getTeamMembersWithUser(teamId: String): Flow<List<TeamMemberWithUser>>
-
-    @Transaction
-    @Query("SELECT * FROM team_members WHERE teamId = :teamId")
-    suspend fun getTeamMembersWithUserSync(teamId: String): List<TeamMemberWithUser>
-
-    @Query("SELECT * FROM team_members WHERE userId = :userId AND teamId = :teamId LIMIT 1")
-    suspend fun getTeamMemberByUserIdAndTeamId(userId: String, teamId: String): TeamMemberEntity?
 
     @Query("SELECT * FROM team_members WHERE userId = :userId")
     fun getUserTeamMemberships(userId: String): Flow<List<TeamMemberEntity>>

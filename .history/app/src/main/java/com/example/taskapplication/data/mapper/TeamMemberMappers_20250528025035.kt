@@ -3,7 +3,6 @@ package com.example.taskapplication.data.mapper
 import com.example.taskapplication.data.api.response.TeamMemberResponse
 import com.example.taskapplication.data.database.entities.TeamMemberEntity
 import com.example.taskapplication.data.database.entities.TeamMemberWithUser
-import com.example.taskapplication.data.database.entities.UserEntity
 import com.example.taskapplication.domain.model.TeamMember
 import java.util.*
 
@@ -64,47 +63,13 @@ fun TeamMemberResponse.toEntity(teamId: String, existingMember: TeamMemberEntity
     return TeamMemberEntity(
         id = existingMember?.id ?: UUID.randomUUID().toString(),
         teamId = teamId,
-        userId = userId, // Use userId from response, not id
+        userId = id.toString(),
         role = role,
         joinedAt = System.currentTimeMillis(), // Joined time is not provided in response
         invitedBy = existingMember?.invitedBy,
-        serverId = id, // Use id as serverId
+        serverId = id.toString(),
         syncStatus = "synced",
         lastModified = System.currentTimeMillis(),
         createdAt = existingMember?.createdAt ?: System.currentTimeMillis()
-    )
-}
-
-// API Response to Domain (with user information)
-fun TeamMemberResponse.toDomainModel(existingMember: TeamMemberEntity? = null): TeamMember {
-    return TeamMember(
-        id = existingMember?.id ?: UUID.randomUUID().toString(),
-        teamId = teamId,
-        userId = userId,
-        role = role,
-        joinedAt = System.currentTimeMillis(),
-        invitedBy = existingMember?.invitedBy,
-        serverId = id,
-        syncStatus = "synced",
-        lastModified = System.currentTimeMillis(),
-        createdAt = existingMember?.createdAt ?: System.currentTimeMillis(),
-        // User information from API response
-        userName = user.name,
-        userEmail = user.email,
-        userAvatar = user.avatar
-    )
-}
-
-// Extract UserEntity from TeamMemberResponse
-fun TeamMemberResponse.toUserEntity(existingUser: UserEntity? = null): UserEntity {
-    return UserEntity(
-        id = userId,
-        name = user.name,
-        email = user.email,
-        avatar = user.avatar,
-        serverId = user.id.toString(),
-        syncStatus = "synced",
-        lastModified = System.currentTimeMillis(),
-        createdAt = existingUser?.createdAt ?: System.currentTimeMillis()
     )
 }

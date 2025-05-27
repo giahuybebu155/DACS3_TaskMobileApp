@@ -160,9 +160,8 @@ fun TeamMemberItem(
                             onClick = {
                                 if (member.role == "admin") {
                                     // Show confirmation dialog for demoting admin
-                                    val displayName = member.userName ?: member.userId
                                     confirmTitle = "Demote Admin"
-                                    confirmMessage = "Are you sure you want to demote $displayName from admin to member? This will remove their administrative privileges."
+                                    confirmMessage = "Are you sure you want to demote ${member.userId} from admin to member? This will remove their administrative privileges."
                                     confirmAction = { onChangeRole(member.userId, newRole) }
                                     showConfirmDialog = true
                                 } else {
@@ -212,9 +211,8 @@ fun TeamMemberItem(
                             },
                             onClick = {
                                 // Show confirmation dialog for removing member
-                                val displayName = member.userName ?: member.userId
                                 confirmTitle = "Remove Member"
-                                confirmMessage = "Are you sure you want to remove $displayName from the team? This action cannot be undone."
+                                confirmMessage = "Are you sure you want to remove ${member.userId} from the team? This action cannot be undone."
                                 confirmAction = { onRemoveMember(member.userId) }
                                 showConfirmDialog = true
                                 showMenu = false

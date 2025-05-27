@@ -3,7 +3,6 @@ package com.example.taskapplication.data.mapper
 import com.example.taskapplication.data.api.response.TeamMemberResponse
 import com.example.taskapplication.data.database.entities.TeamMemberEntity
 import com.example.taskapplication.data.database.entities.TeamMemberWithUser
-import com.example.taskapplication.data.database.entities.UserEntity
 import com.example.taskapplication.domain.model.TeamMember
 import java.util.*
 
@@ -92,19 +91,5 @@ fun TeamMemberResponse.toDomainModel(existingMember: TeamMemberEntity? = null): 
         userName = user.name,
         userEmail = user.email,
         userAvatar = user.avatar
-    )
-}
-
-// Extract UserEntity from TeamMemberResponse
-fun TeamMemberResponse.toUserEntity(existingUser: UserEntity? = null): UserEntity {
-    return UserEntity(
-        id = userId,
-        name = user.name,
-        email = user.email,
-        avatar = user.avatar,
-        serverId = user.id.toString(),
-        syncStatus = "synced",
-        lastModified = System.currentTimeMillis(),
-        createdAt = existingUser?.createdAt ?: System.currentTimeMillis()
     )
 }
