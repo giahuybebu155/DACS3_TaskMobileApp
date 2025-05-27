@@ -157,7 +157,7 @@ class TeamRepositoryImpl @Inject constructor(
     override suspend fun createTeam(team: Team): Result<Team> {
         try {
             // Lấy thông tin người dùng hiện tại
-            val currentUserId = dataStoreManager.getCurrentUserId()
+            val currentUserId = dataStoreManager.getCurrentUserId().first()
                 ?: return Result.failure(IOException("User not logged in"))
 
             // Tạo ID mới nếu chưa có
@@ -392,7 +392,7 @@ class TeamRepositoryImpl @Inject constructor(
             Log.d(TAG, "✅ [THEO DÕI] Tìm thấy nhóm: ${team.name} (ID: $teamId)")
 
             // Lấy thông tin người dùng hiện tại
-            val currentUserId = dataStoreManager.getCurrentUserId()
+            val currentUserId = dataStoreManager.getCurrentUserId().first()
             if (currentUserId == null) {
                 Log.e(TAG, "❌ [THEO DÕI] Người dùng chưa đăng nhập")
                 return Result.failure(IOException("Bạn chưa đăng nhập"))

@@ -497,6 +497,14 @@ class TeamRepositoryImpl @Inject constructor(
             val teamName = team.name.takeIf { !it.isNullOrBlank() } ?: "Nhóm không xác định"
             Log.d(TAG, "ℹ️ [THEO DÕI] Tên nhóm: $teamName")
 
+            // Kiểm tra xem đã có lời mời cho email này chưa
+            val database = com.example.taskapplication.data.database.AppDatabase.getInstance(context)
+            val existingInvitation = database.teamInvitationDao().getInvitationByTeamAndEmail(teamId, userEmail)
+            if (existingInvitation != null && existingInvitation.status == "pending") {
+                Log.w(TAG, "⚠️ [THEO DÕI] Đã có lời mời pending cho email này")
+                return Result.failure(IOException("Đã có lời mời đang chờ cho email này"))
+            }
+
             // Thêm thành viên vào team
             val teamMemberEntity = TeamMemberEntity(
                 id = UUID.randomUUID().toString(),

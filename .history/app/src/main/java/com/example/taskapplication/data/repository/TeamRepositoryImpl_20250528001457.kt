@@ -52,8 +52,7 @@ class TeamRepositoryImpl @Inject constructor(
     private fun TeamEntity.toApiModel(): com.example.taskapplication.data.api.request.TeamRequest {
         return com.example.taskapplication.data.api.request.TeamRequest(
             name = this.name,
-            description = this.description ?: "",
-            ownerId = this.ownerId ?: ""
+            description = this.description ?: ""
         )
     }
 

@@ -170,55 +170,53 @@ class TeamRepositoryImpl @Inject constructor(
                 team.copy(createdBy = currentUserId)
             }
 
-            // Lưu vào local database trước
-            val teamEntity = teamWithId.toEntity().copy(
-                syncStatus = "pending_create",
-                lastModified = System.currentTimeMillis()
-                // Không thiết lập ownerId vì hệ thống chỉ sử dụng manager và member
-            )
-            teamDao.insertTeam(teamEntity)
+            // Sử dụng transaction để đảm bảo cả team và team member được insert cùng lúc
+            val database = com.example.taskapplication.data.database.AppDatabase.getInstance(context)
+            database.runInTransaction {
+                // Lưu vào local database trước
+                val teamEntity = teamWithId.toEntity().copy(
+                    syncStatus = "pending_create",
+                    lastModified = System.currentTimeMillis()
+                    // Không thiết lập ownerId vì hệ thống chỉ sử dụng manager và member
+                )
 
-            // Thêm người tạo team vào danh sách thành viên với vai trò manager
-            val teamMemberEntity = TeamMemberEntity(
-                id = UUID.randomUUID().toString(),
-                teamId = teamWithId.id,
-                userId = currentUserId,
-                role = "manager", // Người tạo team mặc định là manager
-                joinedAt = System.currentTimeMillis(),
-                invitedBy = currentUserId,
-                serverId = null,
-                syncStatus = "pending_create",
-                lastModified = System.currentTimeMillis(),
-                createdAt = System.currentTimeMillis()
-            )
+                // Xóa bất kỳ thành viên nào đã tồn tại với cùng userId và teamId để tránh xung đột
+                val existingMember = teamMemberDao.getTeamMemberSync(teamWithId.id, currentUserId)
+                if (existingMember != null) {
+                    Log.d(TAG, "⚠️ [THEO DÕI] Đã tồn tại thành viên, xóa để tránh xung đột")
+                    teamMemberDao.deleteTeamMember(existingMember)
+                }
 
-            // Xóa bất kỳ thành viên nào đã tồn tại với cùng userId và teamId để tránh xung đột
-            val existingMember = teamMemberDao.getTeamMemberSync(teamWithId.id, currentUserId)
-            if (existingMember != null) {
-                Log.d(TAG, "⚠️ [THEO DÕI] Đã tồn tại thành viên, xóa để tránh xung đột")
-                teamMemberDao.deleteTeamMember(existingMember)
-            }
+                // Insert team trước
+                teamDao.insertTeam(teamEntity)
+                Log.d(TAG, "✅ [THEO DÕI] Đã lưu team vào database: ${teamEntity.name} (ID: ${teamEntity.id})")
 
-            // Thêm người dùng vào nhóm với vai trò manager
-            teamMemberDao.insertTeamMember(teamMemberEntity)
-            Log.d(TAG, "✅ [THEO DÕI] Đã thêm người tạo nhóm với vai trò manager: ${teamMemberEntity.id}")
+                // Thêm người tạo team vào danh sách thành viên với vai trò manager
+                val teamMemberEntity = TeamMemberEntity(
+                    id = UUID.randomUUID().toString(),
+                    teamId = teamWithId.id,
+                    userId = currentUserId,
+                    role = "manager", // Người tạo team mặc định là manager
+                    joinedAt = System.currentTimeMillis(),
+                    invitedBy = currentUserId,
+                    serverId = null,
+                    syncStatus = "pending_create",
+                    lastModified = System.currentTimeMillis(),
+                    createdAt = System.currentTimeMillis()
+                )
 
-            // Kiểm tra xem người dùng đã được thêm vào nhóm chưa
-            val isUserMember = teamMemberDao.isUserMemberOfTeam(teamWithId.id, currentUserId)
-            Log.d(TAG, "🔍 [THEO DÕI] Kiểm tra người dùng đã là thành viên của nhóm: $isUserMember")
-
-            if (!isUserMember) {
-                Log.d(TAG, "⚠️ [THEO DÕI] Người dùng chưa được thêm vào nhóm, thử thêm lại")
-                // Thử thêm lại nếu chưa thành công
+                // Insert team member ngay sau đó trong cùng transaction
                 teamMemberDao.insertTeamMember(teamMemberEntity)
+                Log.d(TAG, "✅ [THEO DÕI] Đã thêm người tạo nhóm với vai trò manager: ${teamMemberEntity.id}")
 
-                // Kiểm tra lại
-                val isUserMemberAfterRetry = teamMemberDao.isUserMemberOfTeam(teamWithId.id, currentUserId)
-                Log.d(TAG, "🔍 [THEO DÕI] Kiểm tra lại sau khi thử lại: $isUserMemberAfterRetry")
+                // Kiểm tra xem người dùng đã được thêm vào nhóm chưa
+                val isUserMember = teamMemberDao.isUserMemberOfTeam(teamWithId.id, currentUserId)
+                Log.d(TAG, "🔍 [THEO DÕI] Kiểm tra người dùng đã là thành viên của nhóm: $isUserMember")
 
-                // Kiểm tra vai trò
-                val memberAfterRetry = teamMemberDao.getTeamMemberSync(teamWithId.id, currentUserId)
-                Log.d(TAG, "🔍 [THEO DÕI] Vai trò sau khi thử lại: ${memberAfterRetry?.role}")
+                if (!isUserMember) {
+                    Log.e(TAG, "❌ [THEO DÕI] CRITICAL: Người dùng chưa được thêm vào nhóm sau transaction!")
+                    throw RuntimeException("Failed to add user to team")
+                }
             }
 
             // Nếu có kết nối mạng, đồng bộ lên server

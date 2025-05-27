@@ -191,7 +191,7 @@ class WebSocketManager @Inject constructor(
         reconnectJob?.cancel()
         Log.d(TAG, "🚫 [CONNECT] Cancelled any pending reconnect jobs")
 
-        val wsUrl = ReverbConfig.getWebSocketUrl()
+        val wsUrl = ReverbConfig.getWebSocketUrl(authToken)
         Log.d(TAG, "🌐 [CONNECT] WebSocket URL: $wsUrl")
         Log.d(TAG, "🎯 [CONNECT] Target team: $teamId (parsed: $teamIdLong)")
 
@@ -270,7 +270,7 @@ class WebSocketManager @Inject constructor(
 
                 // ✅ Subscribe to team channel (Pusher protocol format)
                 if (teamId != null) {
-                    val teamChannel = ReverbConfig.getTeamChannel(teamId.toString())
+                    val teamChannel = ReverbConfig.getTeamChannel(teamId)
                     val subscribeMessage = JSONObject().apply {
                         put("event", "pusher:subscribe")
                         put("data", JSONObject().apply {
@@ -291,7 +291,7 @@ class WebSocketManager @Inject constructor(
                 Log.d(TAG, "👤 [WS_OPEN] Current user ID: $userId")
 
                 if (userId != null) {
-                    val userChannel = ReverbConfig.getUserChannel(userId.toString())
+                    val userChannel = ReverbConfig.getUserChannel(userId)
                     val userSubscribeMessage = JSONObject().apply {
                         put("event", "pusher:subscribe")
                         put("data", JSONObject().apply {

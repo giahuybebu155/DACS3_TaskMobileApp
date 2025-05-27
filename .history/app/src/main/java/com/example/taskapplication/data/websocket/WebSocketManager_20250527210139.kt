@@ -291,7 +291,7 @@ class WebSocketManager @Inject constructor(
                 Log.d(TAG, "👤 [WS_OPEN] Current user ID: $userId")
 
                 if (userId != null) {
-                    val userChannel = ReverbConfig.getUserChannel(userId.toString())
+                    val userChannel = ReverbConfig.getUserChannel(userId)
                     val userSubscribeMessage = JSONObject().apply {
                         put("event", "pusher:subscribe")
                         put("data", JSONObject().apply {

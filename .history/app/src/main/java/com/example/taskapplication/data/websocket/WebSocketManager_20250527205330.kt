@@ -191,7 +191,7 @@ class WebSocketManager @Inject constructor(
         reconnectJob?.cancel()
         Log.d(TAG, "🚫 [CONNECT] Cancelled any pending reconnect jobs")
 
-        val wsUrl = ReverbConfig.getWebSocketUrl()
+        val wsUrl = ReverbConfig.getWebSocketUrl(authToken)
         Log.d(TAG, "🌐 [CONNECT] WebSocket URL: $wsUrl")
         Log.d(TAG, "🎯 [CONNECT] Target team: $teamId (parsed: $teamIdLong)")
 
@@ -214,7 +214,7 @@ class WebSocketManager @Inject constructor(
                 .build()
 
             Log.d(TAG, "🎧 [CONNECT] Creating WebSocket listener for team: $teamIdLong")
-            webSocket = client.newWebSocket(request, createWebSocketListener(teamIdLong, authToken))
+            webSocket = client.newWebSocket(request, createWebSocketListener(teamIdLong))
             _connectionState.value = ConnectionState.CONNECTING
             Log.d(TAG, "📡 [CONNECT] WebSocket connection request sent - State: CONNECTING")
             Log.d(TAG, "⏳ [CONNECT] Waiting for server response...")
@@ -248,11 +248,11 @@ class WebSocketManager @Inject constructor(
             .url("$serverUrl?token=$authToken")
             .build()
 
-        webSocket = OkHttpClient().newWebSocket(request, createWebSocketListener(teamIdLong, authToken))
+        webSocket = OkHttpClient().newWebSocket(request, createWebSocketListener(teamIdLong))
         _connectionState.value = ConnectionState.CONNECTING
     }
 
-    private fun createWebSocketListener(teamId: Long?, authToken: String): WebSocketListener {
+    private fun createWebSocketListener(teamId: Long?): WebSocketListener {
         return object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.d(TAG, "🎉 [WS_OPEN] ===== WEBSOCKET CONNECTED =====")
@@ -270,7 +270,7 @@ class WebSocketManager @Inject constructor(
 
                 // ✅ Subscribe to team channel (Pusher protocol format)
                 if (teamId != null) {
-                    val teamChannel = ReverbConfig.getTeamChannel(teamId.toString())
+                    val teamChannel = ReverbConfig.getTeamChannel(teamId)
                     val subscribeMessage = JSONObject().apply {
                         put("event", "pusher:subscribe")
                         put("data", JSONObject().apply {
@@ -291,16 +291,12 @@ class WebSocketManager @Inject constructor(
                 Log.d(TAG, "👤 [WS_OPEN] Current user ID: $userId")
 
                 if (userId != null) {
-                    val userChannel = ReverbConfig.getUserChannel(userId.toString())
                     val userSubscribeMessage = JSONObject().apply {
-                        put("event", "pusher:subscribe")
-                        put("data", JSONObject().apply {
-                            put("channel", userChannel)
-                            put("auth", ReverbConfig.formatAuthToken(authToken))
-                        })
+                        put("event", "subscribe")
+                        put("channel", "private-users.$userId")
                     }.toString()
 
-                    Log.d(TAG, "📡 [WS_OPEN] Subscribing to user channel: $userChannel")
+                    Log.d(TAG, "📡 [WS_OPEN] Subscribing to user channel: private-users.$userId")
                     Log.d(TAG, "📡 [WS_OPEN] User subscribe message: $userSubscribeMessage")
                     webSocket.send(userSubscribeMessage)
                 } else {
@@ -683,45 +679,34 @@ class WebSocketManager @Inject constructor(
     }
 
     fun sendTypingStatus(teamId: String, isTyping: Boolean) {
-        val teamChannel = ReverbConfig.getTeamChannel(teamId)
+        val teamIdLong = teamId.toLongOrNull() ?: return
         val json = JSONObject().apply {
             put("event", "client-typing")
-            put("channel", teamChannel)
+            put("channel", "private-teams.$teamIdLong")
             put("data", JSONObject().apply {
-                put("team_id", teamId.toLongOrNull() ?: teamId)
+                put("team_id", teamIdLong)
                 put("is_typing", isTyping)
                 put("timestamp", System.currentTimeMillis())
             })
         }
-        Log.d(TAG, "📤 [TYPING] Sending typing status: $isTyping for team: $teamChannel")
         webSocket?.send(json.toString())
     }
 
     /**
-     * ✅ Subscribe to team channel (Pusher protocol format)
+     * Inscrever-se em um canal de equipe
      */
     fun subscribeToTeam(teamId: Long) {
         if (_connectionState.value != ConnectionState.CONNECTED) {
-            Log.d(TAG, "❌ Cannot subscribe to team $teamId: WebSocket not connected")
+            Log.d(TAG, "Não é possível inscrever-se no canal da equipe $teamId: WebSocket não está conectado")
             return
         }
 
-        if (lastAuthToken.isEmpty()) {
-            Log.e(TAG, "❌ Cannot subscribe to team $teamId: No auth token available")
-            return
-        }
-
-        val teamChannel = ReverbConfig.getTeamChannel(teamId.toString())
         val subscribeMessage = JSONObject().apply {
-            put("event", "pusher:subscribe")
-            put("data", JSONObject().apply {
-                put("channel", teamChannel)
-                put("auth", ReverbConfig.formatAuthToken(lastAuthToken))
-            })
+            put("event", "subscribe")
+            put("channel", "private-teams.$teamId")
         }.toString()
 
-        Log.d(TAG, "📡 [SUBSCRIBE] Subscribing to: $teamChannel")
-        Log.d(TAG, "📡 [SUBSCRIBE] Message: $subscribeMessage")
+        Log.d(TAG, "Inscrevendo-se no canal: private-teams.$teamId")
         webSocket?.send(subscribeMessage)
     }
 

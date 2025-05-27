@@ -45,34 +45,24 @@ class WebSocketManager @Inject constructor(
     private var lastAuthToken: String = ""
     private var lastTeamId: String = ""
     private var reconnectAttempt = 0
-    private val maxReconnectDelay = 30000L // 30 seconds max
-    private val baseReconnectDelay = 2000L // 2 seconds base
+    private val maxReconnectDelay = 16000L // 16 seconds
+    private val baseReconnectDelay = 1000L // 1 second
     private var reconnectJob: kotlinx.coroutines.Job? = null
-    private val maxReconnectAttempts = 5 // Giới hạn số lần thử
-    private var lastReconnectTime = 0L // Thời gian reconnect cuối
 
     init {
         // Theo dõi trạng thái kết nối mạng
         scope.launch {
             networkConnectivityObserver.observe().collect { isConnected ->
                 if (isConnected) {
-                    // Chỉ kết nối lại nếu có token và không đang connecting
-                    if (lastAuthToken.isNotEmpty() &&
-                        _connectionState.value == ConnectionState.DISCONNECTED &&
-                        reconnectAttempt < maxReconnectAttempts) {
-
-                        val timeSinceLastReconnect = System.currentTimeMillis() - lastReconnectTime
-                        if (timeSinceLastReconnect > 5000) { // Ít nhất 5 giây giữa các lần thử
-                            Log.d(TAG, "🌐 [NETWORK] Network restored - scheduling reconnect")
-                            scheduleReconnect()
-                        } else {
-                            Log.d(TAG, "🌐 [NETWORK] Network restored but too soon to reconnect")
-                        }
+                    // Kết nối lại WebSocket khi có mạng
+                    if (_connectionState.value == ConnectionState.DISCONNECTED ||
+                        _connectionState.value == ConnectionState.ERROR) {
+                        reconnect()
                     }
                 } else {
                     // Đánh dấu là đã ngắt kết nối khi mất mạng
                     _connectionState.value = ConnectionState.DISCONNECTED
-                    Log.d(TAG, "🌐 [NETWORK] Network disconnected")
+                    Log.d(TAG, "Network disconnected")
                 }
             }
         }
@@ -114,12 +104,11 @@ class WebSocketManager @Inject constructor(
         reconnectJob?.cancel()
         Log.d(TAG, "🚫 [CONNECT] Cancelled any pending reconnect jobs")
 
-        // ✅ LARAVEL REVERB - OFFICIAL API CONFIGURATION
-        val wsUrl = ReverbConfig.getWebSocketUrl()
+        // ✅ LARAVEL REVERB - USE CONFIG
+        val wsUrl = ReverbConfig.getWebSocketUrl(authToken)
         ReverbLogger.logConnection(wsUrl)
         Log.d(TAG, "🌐 [CONNECT] WebSocket URL: $wsUrl")
-        Log.d(TAG, "🎯 [CONNECT] Laravel Reverb (App Key: ${ReverbConfig.REVERB_APP_KEY})")
-        Log.d(TAG, "🔧 [CONNECT] Pusher protocol format - Official API docs")
+        Log.d(TAG, "🎯 [CONNECT] Server will auto-subscribe to user's teams")
 
         val request = Request.Builder()
             .url(wsUrl)
@@ -140,7 +129,7 @@ class WebSocketManager @Inject constructor(
                 .build()
 
             Log.d(TAG, "🎧 [CONNECT] Creating WebSocket listener for user")
-            webSocket = client.newWebSocket(request, createWebSocketListener(null, authToken)) // No teamId needed
+            webSocket = client.newWebSocket(request, createWebSocketListener(null)) // No teamId needed
             _connectionState.value = ConnectionState.CONNECTING
             Log.d(TAG, "📡 [CONNECT] WebSocket connection request sent - State: CONNECTING")
             Log.d(TAG, "⏳ [CONNECT] Waiting for server response...")
@@ -191,7 +180,7 @@ class WebSocketManager @Inject constructor(
         reconnectJob?.cancel()
         Log.d(TAG, "🚫 [CONNECT] Cancelled any pending reconnect jobs")
 
-        val wsUrl = ReverbConfig.getWebSocketUrl()
+        val wsUrl = ReverbConfig.getWebSocketUrl(authToken)
         Log.d(TAG, "🌐 [CONNECT] WebSocket URL: $wsUrl")
         Log.d(TAG, "🎯 [CONNECT] Target team: $teamId (parsed: $teamIdLong)")
 
@@ -214,7 +203,7 @@ class WebSocketManager @Inject constructor(
                 .build()
 
             Log.d(TAG, "🎧 [CONNECT] Creating WebSocket listener for team: $teamIdLong")
-            webSocket = client.newWebSocket(request, createWebSocketListener(teamIdLong, authToken))
+            webSocket = client.newWebSocket(request, createWebSocketListener(teamIdLong))
             _connectionState.value = ConnectionState.CONNECTING
             Log.d(TAG, "📡 [CONNECT] WebSocket connection request sent - State: CONNECTING")
             Log.d(TAG, "⏳ [CONNECT] Waiting for server response...")
@@ -248,11 +237,11 @@ class WebSocketManager @Inject constructor(
             .url("$serverUrl?token=$authToken")
             .build()
 
-        webSocket = OkHttpClient().newWebSocket(request, createWebSocketListener(teamIdLong, authToken))
+        webSocket = OkHttpClient().newWebSocket(request, createWebSocketListener(teamIdLong))
         _connectionState.value = ConnectionState.CONNECTING
     }
 
-    private fun createWebSocketListener(teamId: Long?, authToken: String): WebSocketListener {
+    private fun createWebSocketListener(teamId: Long?): WebSocketListener {
         return object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.d(TAG, "🎉 [WS_OPEN] ===== WEBSOCKET CONNECTED =====")
@@ -263,23 +252,14 @@ class WebSocketManager @Inject constructor(
                 _connectionState.value = ConnectionState.CONNECTED
                 Log.d(TAG, "✅ [WS_OPEN] Connection state updated to: CONNECTED")
 
-                // Reset reconnect attempts on successful connection
-                reconnectAttempt = 0
-                lastReconnectTime = 0L
-                Log.d(TAG, "🔄 [WS_OPEN] Reset reconnect attempts counter")
-
-                // ✅ Subscribe to team channel (Pusher protocol format)
+                // Subscribe to team channel (only if teamId is provided)
                 if (teamId != null) {
-                    val teamChannel = ReverbConfig.getTeamChannel(teamId.toString())
                     val subscribeMessage = JSONObject().apply {
-                        put("event", "pusher:subscribe")
-                        put("data", JSONObject().apply {
-                            put("channel", teamChannel)
-                            put("auth", ReverbConfig.formatAuthToken(authToken))
-                        })
+                        put("event", "subscribe")
+                        put("channel", "private-teams.$teamId")
                     }.toString()
 
-                    Log.d(TAG, "📡 [WS_OPEN] Subscribing to team channel: $teamChannel")
+                    Log.d(TAG, "📡 [WS_OPEN] Subscribing to team channel: private-teams.$teamId")
                     Log.d(TAG, "📡 [WS_OPEN] Subscribe message: $subscribeMessage")
                     webSocket.send(subscribeMessage)
                 } else {
@@ -291,16 +271,12 @@ class WebSocketManager @Inject constructor(
                 Log.d(TAG, "👤 [WS_OPEN] Current user ID: $userId")
 
                 if (userId != null) {
-                    val userChannel = ReverbConfig.getUserChannel(userId.toString())
                     val userSubscribeMessage = JSONObject().apply {
-                        put("event", "pusher:subscribe")
-                        put("data", JSONObject().apply {
-                            put("channel", userChannel)
-                            put("auth", ReverbConfig.formatAuthToken(authToken))
-                        })
+                        put("event", "subscribe")
+                        put("channel", "private-users.$userId")
                     }.toString()
 
-                    Log.d(TAG, "📡 [WS_OPEN] Subscribing to user channel: $userChannel")
+                    Log.d(TAG, "📡 [WS_OPEN] Subscribing to user channel: private-users.$userId")
                     Log.d(TAG, "📡 [WS_OPEN] User subscribe message: $userSubscribeMessage")
                     webSocket.send(userSubscribeMessage)
                 } else {
@@ -375,15 +351,9 @@ class WebSocketManager @Inject constructor(
 
                 t.printStackTrace()
 
-                // If 404 error, try alternative endpoints
-                if (response?.code == 404) {
-                    Log.w(TAG, "🔄 [WS_FAILURE] 404 Error - trying alternative endpoints")
-                    tryAlternativeEndpoints()
-                } else {
-                    // Schedule reconnection with exponential backoff for other errors
-                    Log.d(TAG, "🔄 [WS_FAILURE] Scheduling reconnect due to failure")
-                    scheduleReconnect()
-                }
+                // Schedule reconnection with exponential backoff
+                Log.d(TAG, "🔄 [WS_FAILURE] Scheduling reconnect due to failure")
+                scheduleReconnect()
             }
         }
     }
@@ -506,14 +476,14 @@ class WebSocketManager @Inject constructor(
                 "team.invitation.rejected" -> {
                     Log.d(TAG, "Received team invitation rejected event: $data")
                     val teamId = data?.optLong("team_id")?.toString() ?: return
-                    val invitationId = data?.optString("invitation_id") ?: return
+                    val invitationId = data.optString("invitation_id") ?: return
 
                     _events.emit(ChatEvent.TeamInvitationRejected(teamId, invitationId))
                 }
                 "team.invitation.cancelled" -> {
                     Log.d(TAG, "Received team invitation cancelled event: $data")
                     val teamId = data?.optLong("team_id")?.toString() ?: return
-                    val invitationId = data?.optString("invitation_id") ?: return
+                    val invitationId = data.optString("invitation_id") ?: return
 
                     _events.emit(ChatEvent.TeamInvitationCancelled(teamId, invitationId))
                 }
@@ -635,27 +605,11 @@ class WebSocketManager @Inject constructor(
     }
 
     private fun scheduleReconnect() {
-        // Kiểm tra giới hạn số lần thử
-        if (reconnectAttempt >= maxReconnectAttempts) {
-            Log.w(TAG, "🚫 [RECONNECT] Max reconnect attempts ($maxReconnectAttempts) reached - stopping")
-            _connectionState.value = ConnectionState.ERROR
-            return
-        }
-
-        // Kiểm tra thời gian giữa các lần thử
-        val timeSinceLastReconnect = System.currentTimeMillis() - lastReconnectTime
-        if (timeSinceLastReconnect < 2000) { // Ít nhất 2 giây
-            Log.w(TAG, "🚫 [RECONNECT] Too soon since last attempt - skipping")
-            return
-        }
-
         reconnectJob?.cancel()
         reconnectJob = scope.launch {
             val delay = kotlin.math.min(baseReconnectDelay * (1 shl reconnectAttempt), maxReconnectDelay)
-            Log.d(TAG, "⏰ [RECONNECT] Scheduling reconnect in $delay ms (attempt ${reconnectAttempt + 1}/$maxReconnectAttempts)")
+            Log.d(TAG, "Scheduling reconnect in $delay ms (attempt $reconnectAttempt)")
             kotlinx.coroutines.delay(delay)
-
-            lastReconnectTime = System.currentTimeMillis()
             reconnectAttempt++
             reconnect()
         }
@@ -683,45 +637,34 @@ class WebSocketManager @Inject constructor(
     }
 
     fun sendTypingStatus(teamId: String, isTyping: Boolean) {
-        val teamChannel = ReverbConfig.getTeamChannel(teamId)
+        val teamIdLong = teamId.toLongOrNull() ?: return
         val json = JSONObject().apply {
             put("event", "client-typing")
-            put("channel", teamChannel)
+            put("channel", "private-teams.$teamIdLong")
             put("data", JSONObject().apply {
-                put("team_id", teamId.toLongOrNull() ?: teamId)
+                put("team_id", teamIdLong)
                 put("is_typing", isTyping)
                 put("timestamp", System.currentTimeMillis())
             })
         }
-        Log.d(TAG, "📤 [TYPING] Sending typing status: $isTyping for team: $teamChannel")
         webSocket?.send(json.toString())
     }
 
     /**
-     * ✅ Subscribe to team channel (Pusher protocol format)
+     * Inscrever-se em um canal de equipe
      */
     fun subscribeToTeam(teamId: Long) {
         if (_connectionState.value != ConnectionState.CONNECTED) {
-            Log.d(TAG, "❌ Cannot subscribe to team $teamId: WebSocket not connected")
+            Log.d(TAG, "Não é possível inscrever-se no canal da equipe $teamId: WebSocket não está conectado")
             return
         }
 
-        if (lastAuthToken.isEmpty()) {
-            Log.e(TAG, "❌ Cannot subscribe to team $teamId: No auth token available")
-            return
-        }
-
-        val teamChannel = ReverbConfig.getTeamChannel(teamId.toString())
         val subscribeMessage = JSONObject().apply {
-            put("event", "pusher:subscribe")
-            put("data", JSONObject().apply {
-                put("channel", teamChannel)
-                put("auth", ReverbConfig.formatAuthToken(lastAuthToken))
-            })
+            put("event", "subscribe")
+            put("channel", "private-teams.$teamId")
         }.toString()
 
-        Log.d(TAG, "📡 [SUBSCRIBE] Subscribing to: $teamChannel")
-        Log.d(TAG, "📡 [SUBSCRIBE] Message: $subscribeMessage")
+        Log.d(TAG, "Inscrevendo-se no canal: private-teams.$teamId")
         webSocket?.send(subscribeMessage)
     }
 
@@ -831,64 +774,6 @@ class WebSocketManager @Inject constructor(
     private fun handleSubscriptionError(channel: String, data: JSONObject?) {
         ReverbLogger.logSubscription(channel, false)
         ReverbLogger.logError("Subscription error for $channel: $data")
-    }
-
-    /**
-     * Try alternative WebSocket endpoints when getting 404
-     */
-    private fun tryAlternativeEndpoints() {
-        scope.launch {
-            val alternatives = ReverbConfig.getAlternativeUrls()
-            Log.d(TAG, "🔄 [ALT_ENDPOINTS] Trying ${alternatives.size} alternative endpoints")
-
-            for ((index, url) in alternatives.withIndex()) {
-                Log.d(TAG, "🧪 [ALT_ENDPOINTS] Attempt ${index + 1}/${alternatives.size}: $url")
-
-                try {
-                    val request = Request.Builder().url(url).build()
-                    val client = OkHttpClient.Builder()
-                        .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
-                        .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
-                        .build()
-
-                    val testSocket = client.newWebSocket(request, object : WebSocketListener() {
-                        override fun onOpen(webSocket: WebSocket, response: Response) {
-                            Log.d(TAG, "✅ [ALT_ENDPOINTS] SUCCESS with: $url")
-                            webSocket.close(1000, "Test successful")
-
-                            // Update config to use this working endpoint
-                            Log.d(TAG, "🎯 [ALT_ENDPOINTS] Found working endpoint: $url")
-
-                            // Reset reconnect attempts since we found working endpoint
-                            reconnectAttempt = 0
-                            lastReconnectTime = 0L
-
-                            // Connect directly with working endpoint (no delay)
-                            scope.launch {
-                                kotlinx.coroutines.delay(500) // Short delay to ensure cleanup
-                                if (lastAuthToken.isNotEmpty()) {
-                                    connect(lastAuthToken)
-                                }
-                            }
-                        }
-
-                        override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                            Log.w(TAG, "❌ [ALT_ENDPOINTS] Failed: $url - ${response?.code}")
-                            if (index == alternatives.size - 1) {
-                                Log.e(TAG, "💥 [ALT_ENDPOINTS] All endpoints failed - giving up")
-                                _connectionState.value = ConnectionState.ERROR
-                            }
-                        }
-                    })
-
-                    // Wait a bit before trying next endpoint
-                    kotlinx.coroutines.delay(1000)
-
-                } catch (e: Exception) {
-                    Log.e(TAG, "💥 [ALT_ENDPOINTS] Exception testing $url: ${e.message}")
-                }
-            }
-        }
     }
 
     /**

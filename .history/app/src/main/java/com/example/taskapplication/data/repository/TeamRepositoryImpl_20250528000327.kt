@@ -170,69 +170,71 @@ class TeamRepositoryImpl @Inject constructor(
                 team.copy(createdBy = currentUserId)
             }
 
-            // Lưu vào local database trước
-            val teamEntity = teamWithId.toEntity().copy(
-                syncStatus = "pending_create",
-                lastModified = System.currentTimeMillis()
-                // Không thiết lập ownerId vì hệ thống chỉ sử dụng manager và member
-            )
-            teamDao.insertTeam(teamEntity)
+            // Sử dụng transaction để đảm bảo cả team và team member được insert cùng lúc
+            val database = com.example.taskapplication.data.database.AppDatabase.getInstance(context)
+            database.runInTransaction {
+                // Lưu vào local database trước
+                val teamEntity = teamWithId.toEntity().copy(
+                    syncStatus = "pending_create",
+                    lastModified = System.currentTimeMillis()
+                    // Không thiết lập ownerId vì hệ thống chỉ sử dụng manager và member
+                )
 
-            // Thêm người tạo team vào danh sách thành viên với vai trò manager
-            val teamMemberEntity = TeamMemberEntity(
-                id = UUID.randomUUID().toString(),
-                teamId = teamWithId.id,
-                userId = currentUserId,
-                role = "manager", // Người tạo team mặc định là manager
-                joinedAt = System.currentTimeMillis(),
-                invitedBy = currentUserId,
-                serverId = null,
-                syncStatus = "pending_create",
-                lastModified = System.currentTimeMillis(),
-                createdAt = System.currentTimeMillis()
-            )
+                // Xóa bất kỳ thành viên nào đã tồn tại với cùng userId và teamId để tránh xung đột
+                val existingMember = teamMemberDao.getTeamMemberSync(teamWithId.id, currentUserId)
+                if (existingMember != null) {
+                    Log.d(TAG, "⚠️ [THEO DÕI] Đã tồn tại thành viên, xóa để tránh xung đột")
+                    teamMemberDao.deleteTeamMember(existingMember)
+                }
 
-            // Xóa bất kỳ thành viên nào đã tồn tại với cùng userId và teamId để tránh xung đột
-            val existingMember = teamMemberDao.getTeamMemberSync(teamWithId.id, currentUserId)
-            if (existingMember != null) {
-                Log.d(TAG, "⚠️ [THEO DÕI] Đã tồn tại thành viên, xóa để tránh xung đột")
-                teamMemberDao.deleteTeamMember(existingMember)
-            }
+                // Insert team trước
+                teamDao.insertTeam(teamEntity)
+                Log.d(TAG, "✅ [THEO DÕI] Đã lưu team vào database: ${teamEntity.name} (ID: ${teamEntity.id})")
 
-            // Thêm người dùng vào nhóm với vai trò manager
-            teamMemberDao.insertTeamMember(teamMemberEntity)
-            Log.d(TAG, "✅ [THEO DÕI] Đã thêm người tạo nhóm với vai trò manager: ${teamMemberEntity.id}")
+                // Thêm người tạo team vào danh sách thành viên với vai trò manager
+                val teamMemberEntity = TeamMemberEntity(
+                    id = UUID.randomUUID().toString(),
+                    teamId = teamWithId.id,
+                    userId = currentUserId,
+                    role = "manager", // Người tạo team mặc định là manager
+                    joinedAt = System.currentTimeMillis(),
+                    invitedBy = currentUserId,
+                    serverId = null,
+                    syncStatus = "pending_create",
+                    lastModified = System.currentTimeMillis(),
+                    createdAt = System.currentTimeMillis()
+                )
 
-            // Kiểm tra xem người dùng đã được thêm vào nhóm chưa
-            val isUserMember = teamMemberDao.isUserMemberOfTeam(teamWithId.id, currentUserId)
-            Log.d(TAG, "🔍 [THEO DÕI] Kiểm tra người dùng đã là thành viên của nhóm: $isUserMember")
-
-            if (!isUserMember) {
-                Log.d(TAG, "⚠️ [THEO DÕI] Người dùng chưa được thêm vào nhóm, thử thêm lại")
-                // Thử thêm lại nếu chưa thành công
+                // Insert team member ngay sau đó trong cùng transaction
                 teamMemberDao.insertTeamMember(teamMemberEntity)
+                Log.d(TAG, "✅ [THEO DÕI] Đã thêm người tạo nhóm với vai trò manager: ${teamMemberEntity.id}")
 
-                // Kiểm tra lại
-                val isUserMemberAfterRetry = teamMemberDao.isUserMemberOfTeam(teamWithId.id, currentUserId)
-                Log.d(TAG, "🔍 [THEO DÕI] Kiểm tra lại sau khi thử lại: $isUserMemberAfterRetry")
+                // Kiểm tra xem người dùng đã được thêm vào nhóm chưa
+                val isUserMember = teamMemberDao.isUserMemberOfTeam(teamWithId.id, currentUserId)
+                Log.d(TAG, "🔍 [THEO DÕI] Kiểm tra người dùng đã là thành viên của nhóm: $isUserMember")
 
-                // Kiểm tra vai trò
-                val memberAfterRetry = teamMemberDao.getTeamMemberSync(teamWithId.id, currentUserId)
-                Log.d(TAG, "🔍 [THEO DÕI] Vai trò sau khi thử lại: ${memberAfterRetry?.role}")
+                if (!isUserMember) {
+                    Log.e(TAG, "❌ [THEO DÕI] CRITICAL: Người dùng chưa được thêm vào nhóm sau transaction!")
+                    throw RuntimeException("Failed to add user to team")
+                }
             }
+
+            // Lấy team entity đã được lưu để sync với server
+            val savedTeam = teamDao.getTeamByIdSync(teamWithId.id)
+                ?: return Result.failure(IOException("Failed to retrieve saved team"))
 
             // Nếu có kết nối mạng, đồng bộ lên server
             if (connectionChecker.isNetworkAvailable()) {
                 try {
-                    Log.d(TAG, "🔄 [THEO DÕI] Đang gửi nhóm lên server: ${teamEntity.name} (ID: ${teamEntity.id})")
-                    val response = apiService.createTeam(teamEntity.toApiModel())
+                    Log.d(TAG, "🔄 [THEO DÕI] Đang gửi nhóm lên server: ${savedTeam.name} (ID: ${savedTeam.id})")
+                    val response = apiService.createTeam(savedTeam.toApiModel())
 
                     if (response.isSuccessful && response.body() != null) {
                         val serverTeam = response.body()!!
                         Log.d(TAG, "✅ [THEO DÕI] Tạo nhóm thành công trên server, ID từ server: ${serverTeam.id}")
 
                         // Cập nhật team với thông tin từ server
-                        val updatedTeam = teamEntity.copy(
+                        val updatedTeam = savedTeam.copy(
                             serverId = serverTeam.id,
                             syncStatus = "synced",
                             lastModified = System.currentTimeMillis()
@@ -240,41 +242,45 @@ class TeamRepositoryImpl @Inject constructor(
                         teamDao.updateTeam(updatedTeam)
                         Log.d(TAG, "✅ [THEO DÕI] Đã cập nhật nhóm với ID từ server")
 
-                        // Đồng bộ thành viên nhóm (manager)
-                        try {
-                            Log.d(TAG, "🔄 [THEO DÕI] Đang gửi thành viên nhóm (manager) lên server")
-                            // Tạo request body với đúng định dạng yêu cầu của API
-                            val memberRequest = com.example.taskapplication.data.api.request.TeamMemberRequest(
-                                userId = currentUserId,
-                                role = "manager" // API chỉ chấp nhận "manager" và "member"
-                            )
-
-                            // Log request để debug
-                            Log.d(TAG, "🔄 [THEO DÕI] Gửi request thêm thành viên: userId=${currentUserId}, role=manager, teamId=${serverTeam.id}")
-
-                            val memberResponse = apiService.inviteUserToTeam(
-                                teamId = serverTeam.id,
-                                request = memberRequest
-                            )
-
-                            if (memberResponse.isSuccessful && memberResponse.body() != null) {
-                                val serverMember = memberResponse.body()!!
-                                Log.d(TAG, "✅ [THEO DÕI] Thêm thành viên nhóm thành công, ID từ server: ${serverMember.id}")
-
-                                val updatedMember = teamMemberEntity.copy(
-                                    serverId = serverMember.id.toString(),
-                                    syncStatus = "synced",
-                                    lastModified = System.currentTimeMillis()
+                        // Lấy team member đã được lưu để sync với server
+                        val savedMember = teamMemberDao.getTeamMemberSync(teamWithId.id, currentUserId)
+                        if (savedMember != null) {
+                            // Đồng bộ thành viên nhóm (manager)
+                            try {
+                                Log.d(TAG, "🔄 [THEO DÕI] Đang gửi thành viên nhóm (manager) lên server")
+                                // Tạo request body với đúng định dạng yêu cầu của API
+                                val memberRequest = com.example.taskapplication.data.api.request.TeamMemberRequest(
+                                    userId = currentUserId,
+                                    role = "manager" // API chỉ chấp nhận "manager" và "member"
                                 )
-                                teamMemberDao.updateTeamMember(updatedMember)
-                                Log.d(TAG, "✅ [THEO DÕI] Đã cập nhật thành viên nhóm với ID từ server")
-                            } else {
-                                Log.e(TAG, "❌ [THEO DÕI] Lỗi khi thêm thành viên nhóm trên server: ${memberResponse.code()}")
-                                val errorBody = memberResponse.errorBody()?.string()
-                                Log.e(TAG, "❌ [THEO DÕI] Chi tiết lỗi: $errorBody")
+
+                                // Log request để debug
+                                Log.d(TAG, "🔄 [THEO DÕI] Gửi request thêm thành viên: userId=${currentUserId}, role=manager, teamId=${serverTeam.id}")
+
+                                val memberResponse = apiService.inviteUserToTeam(
+                                    teamId = serverTeam.id,
+                                    request = memberRequest
+                                )
+
+                                if (memberResponse.isSuccessful && memberResponse.body() != null) {
+                                    val serverMember = memberResponse.body()!!
+                                    Log.d(TAG, "✅ [THEO DÕI] Thêm thành viên nhóm thành công, ID từ server: ${serverMember.id}")
+
+                                    val updatedMember = savedMember.copy(
+                                        serverId = serverMember.id.toString(),
+                                        syncStatus = "synced",
+                                        lastModified = System.currentTimeMillis()
+                                    )
+                                    teamMemberDao.updateTeamMember(updatedMember)
+                                    Log.d(TAG, "✅ [THEO DÕI] Đã cập nhật thành viên nhóm với ID từ server")
+                                } else {
+                                    Log.e(TAG, "❌ [THEO DÕI] Lỗi khi thêm thành viên nhóm trên server: ${memberResponse.code()}")
+                                    val errorBody = memberResponse.errorBody()?.string()
+                                    Log.e(TAG, "❌ [THEO DÕI] Chi tiết lỗi: $errorBody")
+                                }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "❌ [THEO DÕI] Lỗi khi đồng bộ thành viên nhóm lên server: ${e.message}", e)
                             }
-                        } catch (e: Exception) {
-                            Log.e(TAG, "❌ [THEO DÕI] Lỗi khi đồng bộ thành viên nhóm lên server: ${e.message}", e)
                         }
                     } else {
                         Log.e(TAG, "❌ [THEO DÕI] Lỗi khi tạo nhóm trên server: ${response.code()}")
@@ -287,7 +293,7 @@ class TeamRepositoryImpl @Inject constructor(
                 }
             }
 
-            return Result.success(teamEntity.toDomainModel())
+            return Result.success(savedTeam.toDomainModel())
         } catch (e: Exception) {
             Log.e(TAG, "Lỗi khi tạo nhóm", e)
             return Result.failure(e)
