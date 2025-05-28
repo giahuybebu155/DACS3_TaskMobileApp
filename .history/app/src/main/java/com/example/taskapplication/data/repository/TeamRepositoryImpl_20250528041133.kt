@@ -1181,7 +1181,7 @@ class TeamRepositoryImpl @Inject constructor(
                     serverId = userInfo.id.toString(),
                     syncStatus = "synced",
                     lastModified = System.currentTimeMillis(),
-                    createdAt = parseTimestamp(userInfo.createdAt) ?: System.currentTimeMillis()
+                    createdAt = parseTimestamp(userInfo.created_at) ?: System.currentTimeMillis()
                 )
                 userDao.insertUser(newUser)
             } else {

@@ -981,17 +981,10 @@ class TeamRepositoryImpl @Inject constructor(
 
                             if (localTeamByUuid == null && localTeamByServerId == null) {
                                 // Nhóm chưa tồn tại, thêm mới
-                                Log.d(TAG, "🔄 [THEO DÕI] Thêm nhóm mới từ server: ${serverTeam.name} (UUID: ${serverTeam.uuid})")
-                                val newTeam = TeamEntity(
-                                    id = serverTeam.uuid, // Sử dụng UUID làm local ID
-                                    name = serverTeam.name,
-                                    description = serverTeam.description,
-                                    ownerId = null, // Sẽ được set từ creator
-                                    createdBy = serverTeam.created_by.toString(),
-                                    serverId = serverTeam.id, // Numeric ID từ server
+                                Log.d(TAG, "🔄 [THEO DÕI] Thêm nhóm mới từ server: ${serverTeam.name} (ID: ${serverTeam.id})")
+                                val newTeam = serverTeam.toEntity().copy(
                                     syncStatus = "synced",
-                                    lastModified = System.currentTimeMillis(),
-                                    createdAt = parseTimestamp(serverTeam.created_at) ?: System.currentTimeMillis()
+                                    lastModified = System.currentTimeMillis()
                                 )
                                 teamDao.insertTeam(newTeam)
                                 Log.d(TAG, "✅ [THEO DÕI] Đã thêm nhóm mới vào cơ sở dữ liệu cục bộ")
@@ -1181,7 +1174,7 @@ class TeamRepositoryImpl @Inject constructor(
                     serverId = userInfo.id.toString(),
                     syncStatus = "synced",
                     lastModified = System.currentTimeMillis(),
-                    createdAt = parseTimestamp(userInfo.createdAt) ?: System.currentTimeMillis()
+                    createdAt = parseTimestamp(userInfo.created_at) ?: System.currentTimeMillis()
                 )
                 userDao.insertUser(newUser)
             } else {

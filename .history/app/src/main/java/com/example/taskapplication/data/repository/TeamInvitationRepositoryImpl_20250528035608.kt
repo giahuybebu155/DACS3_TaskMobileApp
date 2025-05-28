@@ -67,15 +67,6 @@ class TeamInvitationRepositoryImpl @Inject constructor(
 
     override suspend fun sendInvitation(teamId: String, email: String, role: String): Result<TeamInvitation> {
         try {
-            Log.d(TAG, "🚀 [SEND_INVITATION] Bắt đầu gửi lời mời: teamId=$teamId, email=$email, role=$role")
-
-            // 🔍 KIỂM TRA DUPLICATE TRƯỚC KHI GỬI
-            val existingInvitation = teamInvitationDao.getInvitationByTeamAndEmail(teamId, email)
-            if (existingInvitation != null && existingInvitation.status == "pending") {
-                Log.w(TAG, "⚠️ [DUPLICATE] Đã có lời mời pending cho email này trong team $teamId")
-                return Result.failure(IOException("Đã có lời mời đang chờ cho email này"))
-            }
-
             // Create invitation entity
             val invitationId = UUID.randomUUID().toString()
             val timestamp = System.currentTimeMillis()

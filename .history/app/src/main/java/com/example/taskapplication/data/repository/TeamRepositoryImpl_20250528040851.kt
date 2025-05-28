@@ -976,22 +976,15 @@ class TeamRepositoryImpl @Inject constructor(
                         // Xử lý từng nhóm từ server
                         for (serverTeam in serverTeams) {
                             // Kiểm tra xem nhóm đã tồn tại trong cơ sở dữ liệu cục bộ chưa (theo UUID hoặc serverId)
-                            val localTeamByUuid = localTeamMap[serverTeam.uuid] // Sử dụng UUID
-                            val localTeamByServerId = localTeamServerIdMap[serverTeam.id] // Sử dụng numeric ID
+                            val localTeamByUuid = localTeamMap[serverTeam.id]
+                            val localTeamByServerId = localTeamServerIdMap[serverTeam.id]
 
                             if (localTeamByUuid == null && localTeamByServerId == null) {
                                 // Nhóm chưa tồn tại, thêm mới
-                                Log.d(TAG, "🔄 [THEO DÕI] Thêm nhóm mới từ server: ${serverTeam.name} (UUID: ${serverTeam.uuid})")
-                                val newTeam = TeamEntity(
-                                    id = serverTeam.uuid, // Sử dụng UUID làm local ID
-                                    name = serverTeam.name,
-                                    description = serverTeam.description,
-                                    ownerId = null, // Sẽ được set từ creator
-                                    createdBy = serverTeam.created_by.toString(),
-                                    serverId = serverTeam.id, // Numeric ID từ server
+                                Log.d(TAG, "🔄 [THEO DÕI] Thêm nhóm mới từ server: ${serverTeam.name} (ID: ${serverTeam.id})")
+                                val newTeam = serverTeam.toEntity().copy(
                                     syncStatus = "synced",
-                                    lastModified = System.currentTimeMillis(),
-                                    createdAt = parseTimestamp(serverTeam.created_at) ?: System.currentTimeMillis()
+                                    lastModified = System.currentTimeMillis()
                                 )
                                 teamDao.insertTeam(newTeam)
                                 Log.d(TAG, "✅ [THEO DÕI] Đã thêm nhóm mới vào cơ sở dữ liệu cục bộ")
@@ -1016,9 +1009,29 @@ class TeamRepositoryImpl @Inject constructor(
                                     teamDao.updateTeam(updatedTeam)
                                     Log.d(TAG, "✅ [THEO DÕI] Đã cập nhật nhóm trong cơ sở dữ liệu cục bộ")
 
-                                    // 🔄 SYNC MEMBERS từ API response thay vì tự động thêm
-                                    Log.d(TAG, "🔄 [SYNC_MEMBERS] Đồng bộ thành viên từ API response cho existing team: ${serverTeam.name}")
-                                    syncTeamMembersFromApiResponse(serverTeam)
+                                    // Kiểm tra và thêm người dùng hiện tại vào danh sách thành viên nhóm nếu chưa có
+                                    if (currentUserId != null) {
+                                        // Kiểm tra xem người dùng đã là thành viên của nhóm chưa
+                                        val isAlreadyMember = teamMemberDao.isUserMemberOfTeam(existingTeam.id, currentUserId)
+
+                                        if (!isAlreadyMember) {
+                                            Log.d(TAG, "🔄 [THEO DÕI] Thêm người dùng hiện tại vào nhóm: ${serverTeam.name} (ID: ${existingTeam.id})")
+                                            val teamMemberEntity = TeamMemberEntity(
+                                                id = UUID.randomUUID().toString(),
+                                                teamId = existingTeam.id,
+                                                userId = currentUserId,
+                                                role = "member", // Mặc định là member, có thể thay đổi tùy theo API
+                                                joinedAt = System.currentTimeMillis(),
+                                                invitedBy = null,
+                                                serverId = null, // Sẽ được cập nhật khi đồng bộ thành viên
+                                                syncStatus = "synced",
+                                                lastModified = System.currentTimeMillis(),
+                                                createdAt = System.currentTimeMillis()
+                                            )
+                                            teamMemberDao.insertTeamMember(teamMemberEntity)
+                                            Log.d(TAG, "✅ [THEO DÕI] Đã thêm người dùng hiện tại vào nhóm")
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1094,127 +1107,6 @@ class TeamRepositoryImpl @Inject constructor(
 
             // Return SUCCESS instead of failure to prevent crash
             return Result.success(Unit)
-        }
-    }
-
-    /**
-     * Đồng bộ thành viên từ API response
-     */
-    private suspend fun syncTeamMembersFromApiResponse(serverTeam: com.example.taskapplication.data.api.response.TeamResponse) {
-        try {
-            Log.d(TAG, "🔄 [SYNC_MEMBERS] Bắt đầu đồng bộ ${serverTeam.members?.size ?: 0} thành viên cho team: ${serverTeam.name}")
-
-            // Lấy danh sách thành viên hiện tại trong local database
-            val localMembers = teamMemberDao.getTeamMembersSync(serverTeam.uuid) // Sử dụng UUID
-            val localMemberMap = localMembers.associateBy { it.userId }
-
-            // Đồng bộ từng thành viên từ API response
-            serverTeam.members?.forEach { serverMember ->
-                val userId = serverMember.user_id.toString()
-                val existingMember = localMemberMap[userId]
-
-                if (existingMember == null) {
-                    // Thành viên chưa tồn tại, thêm mới
-                    Log.d(TAG, "➕ [SYNC_MEMBERS] Thêm thành viên mới: userId=$userId, role=${serverMember.role}")
-                    val newMember = TeamMemberEntity(
-                        id = UUID.randomUUID().toString(),
-                        teamId = serverTeam.uuid, // Sử dụng UUID thay vì id
-                        userId = userId,
-                        role = serverMember.role,
-                        joinedAt = parseTimestamp(serverMember.joined_at) ?: System.currentTimeMillis(),
-                        invitedBy = serverMember.invited_by?.toString(),
-                        serverId = serverMember.id.toString(),
-                        syncStatus = "synced",
-                        lastModified = System.currentTimeMillis(),
-                        createdAt = parseTimestamp(serverMember.created_at) ?: System.currentTimeMillis()
-                    )
-                    teamMemberDao.insertTeamMember(newMember)
-                } else {
-                    // Thành viên đã tồn tại, cập nhật thông tin
-                    Log.d(TAG, "🔄 [SYNC_MEMBERS] Cập nhật thành viên: userId=$userId, role=${serverMember.role}")
-                    val updatedMember = existingMember.copy(
-                        role = serverMember.role,
-                        serverId = serverMember.id.toString(),
-                        syncStatus = "synced",
-                        lastModified = System.currentTimeMillis()
-                    )
-                    teamMemberDao.updateTeamMember(updatedMember)
-                }
-
-                // Đồng bộ thông tin user nếu có
-                serverMember.user?.let { userInfo ->
-                    syncUserInfo(userInfo)
-                }
-            }
-
-            // Xóa các thành viên không còn trong API response
-            val serverUserIds = serverTeam.members?.map { it.user_id.toString() }?.toSet() ?: emptySet()
-            localMembers.forEach { localMember ->
-                if (localMember.userId !in serverUserIds) {
-                    Log.d(TAG, "🗑️ [SYNC_MEMBERS] Xóa thành viên không còn trong team: userId=${localMember.userId}")
-                    teamMemberDao.deleteTeamMember(localMember)
-                }
-            }
-
-            Log.d(TAG, "✅ [SYNC_MEMBERS] Hoàn thành đồng bộ thành viên cho team: ${serverTeam.name}")
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ [SYNC_MEMBERS] Lỗi khi đồng bộ thành viên: ${e.message}", e)
-        }
-    }
-
-    /**
-     * Đồng bộ thông tin user từ API response
-     */
-    private suspend fun syncUserInfo(userInfo: com.example.taskapplication.data.api.response.UserResponse) {
-        try {
-            val userId = userInfo.id.toString()
-            val existingUser = userDao.getUserById(userId)
-
-            if (existingUser == null) {
-                // User chưa tồn tại, thêm mới
-                Log.d(TAG, "➕ [SYNC_USER] Thêm user mới: ${userInfo.name} (${userInfo.email})")
-                val newUser = com.example.taskapplication.data.database.entities.UserEntity(
-                    id = userId,
-                    name = userInfo.name,
-                    email = userInfo.email,
-                    avatar = userInfo.avatar,
-                    serverId = userInfo.id.toString(),
-                    syncStatus = "synced",
-                    lastModified = System.currentTimeMillis(),
-                    createdAt = parseTimestamp(userInfo.createdAt) ?: System.currentTimeMillis()
-                )
-                userDao.insertUser(newUser)
-            } else {
-                // User đã tồn tại, cập nhật thông tin
-                Log.d(TAG, "🔄 [SYNC_USER] Cập nhật user: ${userInfo.name} (${userInfo.email})")
-                val updatedUser = existingUser.copy(
-                    name = userInfo.name,
-                    email = userInfo.email,
-                    avatar = userInfo.avatar,
-                    serverId = userInfo.id.toString(),
-                    syncStatus = "synced",
-                    lastModified = System.currentTimeMillis()
-                )
-                userDao.updateUser(updatedUser)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ [SYNC_USER] Lỗi khi đồng bộ user: ${e.message}", e)
-        }
-    }
-
-    /**
-     * Parse timestamp từ string
-     */
-    private fun parseTimestamp(timestamp: String?): Long? {
-        return try {
-            if (timestamp.isNullOrEmpty()) return null
-            // Parse ISO 8601 timestamp
-            val formatter = java.time.format.DateTimeFormatter.ISO_DATE_TIME
-            val dateTime = java.time.LocalDateTime.parse(timestamp.replace("Z", ""), formatter)
-            dateTime.atZone(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ [PARSE_TIME] Lỗi parse timestamp: $timestamp", e)
-            null
         }
     }
 

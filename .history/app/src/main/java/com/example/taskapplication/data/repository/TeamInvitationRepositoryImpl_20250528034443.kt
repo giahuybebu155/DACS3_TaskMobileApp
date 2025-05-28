@@ -67,15 +67,6 @@ class TeamInvitationRepositoryImpl @Inject constructor(
 
     override suspend fun sendInvitation(teamId: String, email: String, role: String): Result<TeamInvitation> {
         try {
-            Log.d(TAG, "🚀 [SEND_INVITATION] Bắt đầu gửi lời mời: teamId=$teamId, email=$email, role=$role")
-
-            // 🔍 KIỂM TRA DUPLICATE TRƯỚC KHI GỬI
-            val existingInvitation = teamInvitationDao.getInvitationByTeamAndEmail(teamId, email)
-            if (existingInvitation != null && existingInvitation.status == "pending") {
-                Log.w(TAG, "⚠️ [DUPLICATE] Đã có lời mời pending cho email này trong team $teamId")
-                return Result.failure(IOException("Đã có lời mời đang chờ cho email này"))
-            }
-
             // Create invitation entity
             val invitationId = UUID.randomUUID().toString()
             val timestamp = System.currentTimeMillis()
@@ -531,11 +522,8 @@ class TeamInvitationRepositoryImpl @Inject constructor(
                                 Log.e(TAG, "Lỗi khi gửi lời mời lên server: ${response.code()}, Error: $errorBody")
 
                                 // 🔧 XỬ LÝ LỖI DUPLICATE INVITATION
-                                val isDuplicateError = (response.code() == 400 && errorBody?.contains("invitation has already been sent") == true) ||
-                                                      (response.code() == 500 && errorBody?.contains("Duplicate entry") == true && errorBody.contains("unique_team_email_invitation"))
-
-                                if (isDuplicateError) {
-                                    Log.w(TAG, "⚠️ [DUPLICATE] Lời mời đã tồn tại (${response.code()}), đánh dấu là synced")
+                                if (response.code() == 400 && errorBody?.contains("invitation has already been sent") == true) {
+                                    Log.w(TAG, "⚠️ [DUPLICATE] Lời mời đã được gửi trước đó, đánh dấu là synced")
                                     // Đánh dấu invitation này là đã sync để tránh gửi lại
                                     val updatedInvitation = invitation.copy(
                                         syncStatus = "synced", // Đánh dấu đã sync
@@ -546,7 +534,6 @@ class TeamInvitationRepositoryImpl @Inject constructor(
                                 } else {
                                     // Các lỗi khác, giữ nguyên để retry sau
                                     Log.e(TAG, "❌ [ERROR] Lỗi khác khi gửi invitation: ${response.code()}")
-                                    Log.e(TAG, "❌ [ERROR] Error body: $errorBody")
                                 }
                             }
                         } catch (e: Exception) {
@@ -856,22 +843,11 @@ class TeamInvitationRepositoryImpl @Inject constructor(
                 Log.e(TAG, "❌ [THEO DÕI] Lỗi khi lấy lời mời người dùng: ${e.message}", e)
             }
 
-            Log.d(TAG, "✅ [SYNC] Đồng bộ lời mời hoàn tất thành công")
+            Log.d(TAG, "Đồng bộ lời mời hoàn tất")
             return Result.success(Unit)
         } catch (e: Exception) {
-            Log.e(TAG, "💥 [SYNC_EXCEPTION] Lỗi nghiêm trọng khi đồng bộ lời mời: ${e.message}", e)
-
-            // 🛡️ XỬ LÝ AN TOÀN: Không để app crash
-            try {
-                // Log chi tiết lỗi để debug
-                Log.e(TAG, "💥 [SYNC_EXCEPTION] Stack trace: ${e.stackTraceToString()}")
-
-                // Trả về failure nhưng không crash app
-                return Result.failure(Exception("Sync failed safely: ${e.message}", e))
-            } catch (logException: Exception) {
-                // Nếu thậm chí log cũng fail, trả về lỗi đơn giản
-                return Result.failure(Exception("Sync failed with logging error"))
-            }
+            Log.e(TAG, "Lỗi khi đồng bộ lời mời", e)
+            return Result.failure(e)
         }
     }
     /**

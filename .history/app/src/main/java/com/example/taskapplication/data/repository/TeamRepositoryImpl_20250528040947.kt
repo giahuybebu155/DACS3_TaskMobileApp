@@ -976,22 +976,15 @@ class TeamRepositoryImpl @Inject constructor(
                         // Xử lý từng nhóm từ server
                         for (serverTeam in serverTeams) {
                             // Kiểm tra xem nhóm đã tồn tại trong cơ sở dữ liệu cục bộ chưa (theo UUID hoặc serverId)
-                            val localTeamByUuid = localTeamMap[serverTeam.uuid] // Sử dụng UUID
-                            val localTeamByServerId = localTeamServerIdMap[serverTeam.id] // Sử dụng numeric ID
+                            val localTeamByUuid = localTeamMap[serverTeam.id]
+                            val localTeamByServerId = localTeamServerIdMap[serverTeam.id]
 
                             if (localTeamByUuid == null && localTeamByServerId == null) {
                                 // Nhóm chưa tồn tại, thêm mới
-                                Log.d(TAG, "🔄 [THEO DÕI] Thêm nhóm mới từ server: ${serverTeam.name} (UUID: ${serverTeam.uuid})")
-                                val newTeam = TeamEntity(
-                                    id = serverTeam.uuid, // Sử dụng UUID làm local ID
-                                    name = serverTeam.name,
-                                    description = serverTeam.description,
-                                    ownerId = null, // Sẽ được set từ creator
-                                    createdBy = serverTeam.created_by.toString(),
-                                    serverId = serverTeam.id, // Numeric ID từ server
+                                Log.d(TAG, "🔄 [THEO DÕI] Thêm nhóm mới từ server: ${serverTeam.name} (ID: ${serverTeam.id})")
+                                val newTeam = serverTeam.toEntity().copy(
                                     syncStatus = "synced",
-                                    lastModified = System.currentTimeMillis(),
-                                    createdAt = parseTimestamp(serverTeam.created_at) ?: System.currentTimeMillis()
+                                    lastModified = System.currentTimeMillis()
                                 )
                                 teamDao.insertTeam(newTeam)
                                 Log.d(TAG, "✅ [THEO DÕI] Đã thêm nhóm mới vào cơ sở dữ liệu cục bộ")
@@ -1105,7 +1098,7 @@ class TeamRepositoryImpl @Inject constructor(
             Log.d(TAG, "🔄 [SYNC_MEMBERS] Bắt đầu đồng bộ ${serverTeam.members?.size ?: 0} thành viên cho team: ${serverTeam.name}")
 
             // Lấy danh sách thành viên hiện tại trong local database
-            val localMembers = teamMemberDao.getTeamMembersSync(serverTeam.uuid) // Sử dụng UUID
+            val localMembers = teamMemberDao.getTeamMembersSync(serverTeam.id)
             val localMemberMap = localMembers.associateBy { it.userId }
 
             // Đồng bộ từng thành viên từ API response
@@ -1118,7 +1111,7 @@ class TeamRepositoryImpl @Inject constructor(
                     Log.d(TAG, "➕ [SYNC_MEMBERS] Thêm thành viên mới: userId=$userId, role=${serverMember.role}")
                     val newMember = TeamMemberEntity(
                         id = UUID.randomUUID().toString(),
-                        teamId = serverTeam.uuid, // Sử dụng UUID thay vì id
+                        teamId = serverTeam.id,
                         userId = userId,
                         role = serverMember.role,
                         joinedAt = parseTimestamp(serverMember.joined_at) ?: System.currentTimeMillis(),
@@ -1181,7 +1174,7 @@ class TeamRepositoryImpl @Inject constructor(
                     serverId = userInfo.id.toString(),
                     syncStatus = "synced",
                     lastModified = System.currentTimeMillis(),
-                    createdAt = parseTimestamp(userInfo.createdAt) ?: System.currentTimeMillis()
+                    createdAt = parseTimestamp(userInfo.created_at) ?: System.currentTimeMillis()
                 )
                 userDao.insertUser(newUser)
             } else {

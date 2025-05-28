@@ -123,10 +123,9 @@ class UserInvitationsViewModel @Inject constructor(
     }
 
     /**
-     * Làm mới danh sách lời mời - CHỈ load local data
+     * Làm mới danh sách lời mời
      */
     fun refreshInvitations() {
-        Log.d(TAG, "🔄 [REFRESH] Loading local invitations only")
         loadInvitations()
     }
 

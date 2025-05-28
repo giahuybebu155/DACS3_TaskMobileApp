@@ -27,9 +27,7 @@ class UserInvitationsViewModel @Inject constructor(
     private val dataStoreManager: com.example.taskapplication.data.util.DataStoreManager
 ) : ViewModel() {
 
-    companion object {
-        private const val TAG = "UserInvitationsViewModel"
-    }
+    private val TAG = "UserInvitationsViewModel"
 
     // Danh sách lời mời
     private val _invitations = MutableStateFlow<List<TeamInvitation>>(emptyList())
@@ -46,10 +44,6 @@ class UserInvitationsViewModel @Inject constructor(
     // Trạng thái kết nối WebSocket
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     val connectionState: StateFlow<ConnectionState> = _connectionState
-
-    // Rate limiting cho sync
-    private var lastSyncTime = 0L
-    private val SYNC_COOLDOWN_MS = 5000L // 5 giây cooldown
 
     init {
         loadInvitations()
@@ -72,16 +66,14 @@ class UserInvitationsViewModel @Inject constructor(
             webSocketManager.events.collectLatest { event ->
                 when (event) {
                     is ChatEvent.TeamInvitation -> {
-                        // Chỉ load local data, KHÔNG sync để tránh spam API
-                        Log.d(TAG, "📨 [WS_EVENT] New invitation received - loading local data")
-                        loadInvitations()
+                        // Refresh danh sách lời mời khi có lời mời mới
+                        refreshInvitations()
                     }
                     is ChatEvent.TeamInvitationAccepted,
                     is ChatEvent.TeamInvitationRejected,
                     is ChatEvent.TeamInvitationCancelled -> {
-                        // Chỉ load local data, KHÔNG sync để tránh spam API
-                        Log.d(TAG, "📝 [WS_EVENT] Invitation status changed - loading local data")
-                        loadInvitations()
+                        // Refresh danh sách lời mời khi có thay đổi
+                        refreshInvitations()
                     }
                     else -> {
                         // Không xử lý các sự kiện khác
@@ -123,10 +115,9 @@ class UserInvitationsViewModel @Inject constructor(
     }
 
     /**
-     * Làm mới danh sách lời mời - CHỈ load local data
+     * Làm mới danh sách lời mời
      */
     fun refreshInvitations() {
-        Log.d(TAG, "🔄 [REFRESH] Loading local invitations only")
         loadInvitations()
     }
 
@@ -201,33 +192,21 @@ class UserInvitationsViewModel @Inject constructor(
     }
 
     /**
-     * Đồng bộ lời mời từ server với rate limiting
+     * Đồng bộ lời mời từ server
      */
     private fun syncInvitations() {
-        val currentTime = System.currentTimeMillis()
-
-        // Kiểm tra rate limiting
-        if (currentTime - lastSyncTime < SYNC_COOLDOWN_MS) {
-            Log.d(TAG, "🚫 [SYNC] Rate limited - skipping sync (last sync: ${currentTime - lastSyncTime}ms ago)")
-            return
-        }
-
-        lastSyncTime = currentTime
-        Log.d(TAG, "🔄 [SYNC] Starting invitation sync")
-
         viewModelScope.launch {
             try {
                 val result = teamInvitationRepository.syncInvitations()
                 if (result.isSuccess) {
-                    Log.d(TAG, "✅ [SYNC] Sync successful")
                     // Đồng bộ thành công, làm mới danh sách lời mời
                     refreshInvitations()
                 } else {
                     // Đồng bộ thất bại, ghi log lỗi
-                    Log.e(TAG, "❌ [SYNC] Sync failed: ${result.exceptionOrNull()?.message}")
+                    android.util.Log.e("UserInvitationsViewModel", "Lỗi đồng bộ lời mời: ${result.exceptionOrNull()?.message}")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "💥 [SYNC] Sync exception", e)
+                android.util.Log.e("UserInvitationsViewModel", "Lỗi đồng bộ lời mời", e)
             }
         }
     }

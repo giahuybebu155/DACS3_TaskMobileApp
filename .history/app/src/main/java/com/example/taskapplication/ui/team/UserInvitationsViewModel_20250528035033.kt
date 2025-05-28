@@ -72,16 +72,14 @@ class UserInvitationsViewModel @Inject constructor(
             webSocketManager.events.collectLatest { event ->
                 when (event) {
                     is ChatEvent.TeamInvitation -> {
-                        // Chỉ load local data, KHÔNG sync để tránh spam API
-                        Log.d(TAG, "📨 [WS_EVENT] New invitation received - loading local data")
-                        loadInvitations()
+                        // Refresh danh sách lời mời khi có lời mời mới
+                        refreshInvitations()
                     }
                     is ChatEvent.TeamInvitationAccepted,
                     is ChatEvent.TeamInvitationRejected,
                     is ChatEvent.TeamInvitationCancelled -> {
-                        // Chỉ load local data, KHÔNG sync để tránh spam API
-                        Log.d(TAG, "📝 [WS_EVENT] Invitation status changed - loading local data")
-                        loadInvitations()
+                        // Refresh danh sách lời mời khi có thay đổi
+                        refreshInvitations()
                     }
                     else -> {
                         // Không xử lý các sự kiện khác
@@ -123,10 +121,9 @@ class UserInvitationsViewModel @Inject constructor(
     }
 
     /**
-     * Làm mới danh sách lời mời - CHỈ load local data
+     * Làm mới danh sách lời mời
      */
     fun refreshInvitations() {
-        Log.d(TAG, "🔄 [REFRESH] Loading local invitations only")
         loadInvitations()
     }
 
