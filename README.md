@@ -2,7 +2,7 @@ Task Management Mobile Application.
 
 An Android application designed to help individuals and teams manage tasks, collaborate efficiently, and communicate in real time.
 This project was developed as part of the DACS3 course project and focuses on building a modern task management system with offline-first capability, team collaboration, and scalable architecture. 
-BÁO CÁO DACS3 ANDROID APP
+
 📖 Project Description
 
 The purpose of this project is to develop a mobile task management platform that supports both personal productivity and team collaboration.
